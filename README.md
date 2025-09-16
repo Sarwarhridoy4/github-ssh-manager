@@ -1,6 +1,4 @@
-Here’s an enhanced version of your README with a **Screenshots section** and captions to make it visually appealing and professional:
 
----
 
 # GitHub SSH Manager
 
@@ -74,7 +72,7 @@ A cross-platform GUI tool built with **Go** and **Fyne** that allows you to mana
 ### Run from Source
 
 ```bash
-git clone https://github.com/yourusername/github-ssh-manager.git
+git clone https://github.com/Sarwarhridoy4/github-ssh-manager.git
 cd github-ssh-manager
 go mod tidy
 go run main.go
