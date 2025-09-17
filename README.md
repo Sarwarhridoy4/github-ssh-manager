@@ -38,22 +38,39 @@ A cross-platform GUI tool built with **Go** and **Fyne** that allows you to mana
 ### 1. Main Window
 
 ![Main Window](screenshots/main_window.png)
+
 _Enter your label and PAT, then generate or manage SSH keys easily._
 
-### 2. Public Key Viewer
+### 2. Generate Key(Local with config)
+
+![Generate Key](screenshots/generate_key.png)
+_Generate SSH KEY with config_
+
+### 3. Public Key Viewer
 
 ![Public Key Viewer](screenshots/public_key.png)
+
 _View your public key and copy it to clipboard._
 
-### 3. SSH Config Viewer
+### 4. Upload to GitHub with Personal Access Token(PAT Classic)
 
-![SSH Config Viewer](screenshots/ssh_config.png)
-_Inspect your `~/.ssh/config` in a clean, read-only modal._
+![Upload Key to GitHub](screenshots/upload_response.png)
+_Upload to GitHub with Personal Access Token(PAT Classic)._
 
-### 4. Upload Key Response
+### 5. SSH Connection test(Success)
 
-![Upload Key](screenshots/upload_response.png)
-_GitHub API response after uploading the SSH key._
+![SSH Connection test(Success)](screenshots/test_ssh.png)
+_SSH Connection test(Success)_
+
+### 6. View SSH Config/Copy
+
+![View SSH Config/Copy](screenshots/ssh_config.png)
+_View SSH Config/Copy_
+
+### 6. Show Instructions/Help
+
+![Show Instructions/Help](screenshots/instruction_popup.png)
+_Show Instructions/Help_
 
 ---
 
@@ -123,7 +140,7 @@ go install fyne.io/tools/cmd/fyne@latest
 #### macOS
 
 ```bash
-fyne package -os darwin -icon myapp.png
+fyne package -os darwin -icon icon.png
 ```
 
 This generates `myapp.app`, a complete bundle ready for distribution.
@@ -131,7 +148,7 @@ This generates `myapp.app`, a complete bundle ready for distribution.
 #### Linux
 
 ```bash
-fyne package -os linux -icon myapp.png
+fyne package -os linux -icon icon.png
 ```
 
 Generates `myapp.tar.gz` containing a folder structure starting at `/usr/local/`.
@@ -139,17 +156,41 @@ Generates `myapp.tar.gz` containing a folder structure starting at `/usr/local/`
 #### Windows
 
 ```bash
-fyne package -os windows -icon myapp.png
+fyne package -os windows -icon icon.png
 ```
 
 Generates `myapp.exe` with embedded icon and app metadata.
 
-#### Release Builds
+#### Release Builds(Windows)
 
 For smaller memory footprint and without debug symbols:
 
 ```bash
-fyne package -os windows -icon myapp.png -release
+
+fyne package -os windows --icon icon.png --release --app-id com.sarwar.autossh
+
+```
+
+#### Release Builds(Linux)
+
+For smaller memory footprint and without debug symbols:
+
+```bash
+
+fyne package -os linux --icon icon.png --name autossh --app-version 1.0.0 --app-id com.sarwar.autossh --release
+
+
+```
+
+#### Release Builds(MAC)
+
+For smaller memory footprint and without debug symbols:
+
+```bash
+
+fyne package -os darwin --icon icon.png --name autossh --app-version 1.0.0 --app-id com.sarwar.autossh --release
+
+
 ```
 
 ### Installing Locally
@@ -157,7 +198,7 @@ fyne package -os windows -icon myapp.png -release
 To install your app system-wide on your computer:
 
 ```bash
-fyne install -icon myapp.png
+fyne install -icon icon.png
 ```
 
 > Fyne also supports a default icon named `Icon.png` and a metadata file for project-wide default options.
