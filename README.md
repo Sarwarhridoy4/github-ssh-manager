@@ -8,7 +8,7 @@ A cross-platform GUI tool built with **Go** and **Fyne** that allows you to mana
 
 ---
 
-[![GitHub SSH Manager](https://img.shields.io/badge/GitHub-SSH_Manager-blue?style=for-the-badge&logo=github)](https://github.com/Sarwarhridoy4/github-ssh-manager/releases)
+[![GitHub SSH Manager](https://img.shields.io/badge/GitHub-Download SSH_Manager-blue?style=for-the-badge&logo=github)](https://github.com/Sarwarhridoy4/github-ssh-manager/releases)
 
 ## 📌 Table of Contents
 
