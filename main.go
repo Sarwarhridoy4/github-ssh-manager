@@ -75,14 +75,26 @@ func main() {
 			return
 		}
 
+		// Generate the SSH key
 		if err := exec.Command("ssh-keygen", "-t", "ed25519", "-C", label+"@github", "-f", keyPath, "-N", "").Run(); err != nil {
 			dialog.ShowError(fmt.Errorf("keygen failed: %v", err), w)
 			return
 		}
 
+		// Add GitHub to known_hosts
+		knownHostsPath := filepath.Join(sshDir, "known_hosts")
+		cmd := exec.Command("ssh-keyscan", "github.com")
+		out, err := cmd.Output()
+		if err == nil {
+			f, _ := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			defer f.Close()
+			f.Write(out)
+		}
+
+		// Update SSH config
 		hostAlias := "github-" + label
 		appendConfig(configFile, hostAlias, "github.com", keyPath)
-		dialog.ShowInformation("Success", "SSH key generated and config updated:\n"+keyPath, w)
+		dialog.ShowInformation("Success", "SSH key generated, config updated, and github.com added to known_hosts:\n"+keyPath, w)
 	})
 
 	// Show Public Key
