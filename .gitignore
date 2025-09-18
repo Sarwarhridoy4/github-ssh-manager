@@ -3,3 +3,8 @@ go.sum
 dist
 autossh.exe
 .ssh
+github-ssh-manager-deb
+github-ssh-manager.AppDir
+GitHub_SSH_Manager-x86_64.AppImage
+github-ssh-manager
+github-ssh-manager_1.0.1_amd64.deb
