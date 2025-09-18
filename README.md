@@ -10,7 +10,6 @@ A cross-platform GUI tool built with **Go** and **Fyne** that allows you to mana
 
 [![Download GitHub SSH Manager](https://img.shields.io/badge/Download-GitHub_SSH_Manager-blue?style=for-the-badge&logo=github)](https://github.com/Sarwarhridoy4/github-ssh-manager/releases)
 
-
 ## 📌 Table of Contents
 
 - [Features](#features)
@@ -170,7 +169,14 @@ For smaller memory footprint and without debug symbols:
 
 ```bash
 
-fyne package -os windows --icon icon.png --release --app-id com.sarwar.autossh
+fyne package -os windows \
+    -icon icon.png \
+    -name "GitHub SSH Manager" \
+    -app-id "com.sarwar.githubsshmanager" \
+    --app-version 1.0.0 \
+    --build 1 \
+    --release
+
 
 ```
 
@@ -180,7 +186,14 @@ For smaller memory footprint and without debug symbols:
 
 ```bash
 
-fyne package -os linux --icon icon.png --name autossh --app-version 1.0.0 --app-id com.sarwar.autossh --release
+fyne package -os linux \
+    -icon icon.png \
+    -name "GitHub SSH Manager" \
+    -app-id "com.sarwar.githubsshmanager" \
+    --app-version 1.0.0 \
+    --build 1 \
+    --release
+
 
 
 ```
@@ -191,7 +204,14 @@ For smaller memory footprint and without debug symbols:
 
 ```bash
 
-fyne package -os darwin --icon icon.png --name autossh --app-version 1.0.0 --app-id com.sarwar.autossh --release
+fyne package -os darwin \
+    -icon icon.png \
+    -name "GitHub SSH Manager" \
+    -app-id "com.sarwar.githubsshmanager" \
+    --app-version 1.0.0 \
+    --build 1 \
+    --release
+
 
 
 ```

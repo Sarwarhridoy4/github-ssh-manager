@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -22,7 +23,27 @@ func main() {
 	w := a.NewWindow("GitHub SSH Manager")
 	w.Resize(fyne.NewSize(700, 550))
 
-	sshDir := filepath.Join(os.Getenv("HOME"), ".ssh")
+	// Determine SSH directory cross-platform
+	var sshDir string
+	switch runtime.GOOS {
+	case "windows":
+		if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
+			sshDir = filepath.Join(userProfile, ".ssh")
+		} else {
+			dialog.ShowError(fmt.Errorf("cannot determine USERPROFILE on Windows"), w)
+			return
+		}
+	case "linux", "darwin":
+		if home := os.Getenv("HOME"); home != "" {
+			sshDir = filepath.Join(home, ".ssh")
+		} else {
+			dialog.ShowError(fmt.Errorf("cannot determine HOME on Linux/macOS"), w)
+			return
+		}
+	default:
+		dialog.ShowError(fmt.Errorf("unsupported OS: %s", runtime.GOOS), w)
+		return
+	}
 	os.MkdirAll(sshDir, 0700)
 	configFile := filepath.Join(sshDir, "config")
 
@@ -75,24 +96,27 @@ func main() {
 			return
 		}
 
-		// Generate the SSH key
-		if err := exec.Command("ssh-keygen", "-t", "ed25519", "-C", label+"@github", "-f", keyPath, "-N", "").Run(); err != nil {
-			dialog.ShowError(fmt.Errorf("keygen failed: %v", err), w)
+		// Generate the SSH key with error capture
+		cmd := exec.Command("ssh-keygen", "-t", "ed25519", "-C", label+"@github", "-f", keyPath, "-N", "")
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			dialog.ShowError(fmt.Errorf("keygen failed: %v\n%s", err, stderr.String()), w)
 			return
 		}
 
 		// Add GitHub to known_hosts
 		knownHostsPath := filepath.Join(sshDir, "known_hosts")
-		cmd := exec.Command("ssh-keyscan", "github.com")
-		out, err := cmd.Output()
+		scanCmd := exec.Command("ssh-keyscan", "github.com")
+		out, err := scanCmd.Output()
 		if err == nil {
 			f, _ := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 			defer f.Close()
 			f.Write(out)
 		}
 
-		// Update SSH config
-		hostAlias := "github-" + label
+		// Update SSH config with fixed alias
+		hostAlias := "github-linux"
 		appendConfig(configFile, hostAlias, "github.com", keyPath)
 		dialog.ShowInformation("Success", "SSH key generated, config updated, and github.com added to known_hosts:\n"+keyPath, w)
 	})
@@ -158,14 +182,9 @@ func main() {
 		dialog.ShowInformation("Response", out.String(), w)
 	})
 
-	// Test SSH Connection
+	// Test SSH Connection using fixed alias
 	testBtn := widget.NewButtonWithIcon("Test SSH", theme.ConfirmIcon(), func() {
-		label := labelEntry.Text
-		if label == "" {
-			dialog.ShowError(fmt.Errorf("please enter a label"), w)
-			return
-		}
-		hostAlias := "github-" + label
+		hostAlias := "github-linux"
 		cmd := exec.Command("ssh", "-T", "git@"+hostAlias)
 		var out, stderr bytes.Buffer
 		cmd.Stdout = &out
@@ -177,7 +196,7 @@ func main() {
 		dialog.ShowInformation("SSH Test", out.String(), w)
 	})
 
-	// View SSH Config (polished modal)
+	// View SSH Config
 	viewConfigBtn := widget.NewButtonWithIcon("View SSH Config", theme.DocumentIcon(), func() {
 		cfg, err := ioutil.ReadFile(configFile)
 		if err != nil {
@@ -206,7 +225,7 @@ func main() {
 			container.NewBorder(nil, nil, nil, nil, container.NewPadded(modalContent)), w)
 	})
 
-	// Layout (simple vertical scrollable)
+	// Layout
 	form := container.NewVBox(
 		labelEntry,
 		tokenEntry,
