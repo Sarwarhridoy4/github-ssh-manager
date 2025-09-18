@@ -19,7 +19,7 @@
 # =====================================================================
 
 APP_NAME="github-ssh-manager"
-APP_ID="com.sarwar.githubssh"
+APP_ID="com.sarwar.githubsshmanager"
 
 # --- Determine version from Git or argument ---
 if git rev-parse --git-dir > /dev/null 2>&1; then

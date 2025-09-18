@@ -5,7 +5,7 @@
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Sarwar Hossain"
 #define MyAppURL "https://github.com/Sarwarhridoy4/github-ssh-manager"
-#define MyAppExeName "github-ssh-manager.exe"
+#define MyAppExeName "GitHub SSH Manager.exe"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.

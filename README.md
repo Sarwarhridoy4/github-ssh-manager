@@ -174,7 +174,6 @@ fyne package -os windows \
     -name "GitHub SSH Manager" \
     -app-id "com.sarwar.githubsshmanager" \
     --app-version 1.0.0 \
-    --build 1 \
     --release
 
 
@@ -191,7 +190,6 @@ fyne package -os linux \
     -name "GitHub SSH Manager" \
     -app-id "com.sarwar.githubsshmanager" \
     --app-version 1.0.0 \
-    --build 1 \
     --release
 
 
@@ -209,7 +207,6 @@ fyne package -os darwin \
     -name "GitHub SSH Manager" \
     -app-id "com.sarwar.githubsshmanager" \
     --app-version 1.0.0 \
-    --build 1 \
     --release
 
 

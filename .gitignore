@@ -1,7 +1,7 @@
 
 go.sum
 dist
-github-ssh-manager.exe
+GitHub SSH Manager.exe
 .ssh
 github-ssh-manager-deb
 github-ssh-manager.AppDir
