@@ -5,7 +5,7 @@
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Sarwar Hossain"
 #define MyAppURL "https://github.com/Sarwarhridoy4/github-ssh-manager"
-#define MyAppExeName "autossh.exe"
+#define MyAppExeName "github-ssh-manager.exe"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
@@ -31,13 +31,13 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
-LicenseFile=C:\Users\Sarwar_Hossain\Desktop\auto-ssh\LICENSE
+LicenseFile=C:\Users\Sarwar_Hossain\Desktop\github-ssh-manager\LICENSE
 ; Uncomment the following line to run in non administrative install mode (install for current user only).
 ;PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
-OutputDir=C:\Users\Sarwar_Hossain\Desktop\auto-ssh\dist
+OutputDir=C:\Users\Sarwar_Hossain\Desktop\github-ssh-manager\dist
 OutputBaseFilename=gsm_setup
-SetupIconFile=C:\Users\Sarwar_Hossain\Desktop\auto-ssh\icon.ico
+SetupIconFile=C:\Users\Sarwar_Hossain\Desktop\github-ssh-manager\icon.ico
 SolidCompression=yes
 WizardStyle=modern
 
@@ -48,9 +48,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "C:\Users\Sarwar_Hossain\Desktop\auto-ssh\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Users\Sarwar_Hossain\Desktop\auto-ssh\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Users\Sarwar_Hossain\Desktop\auto-ssh\icon.png"; DestDir: "{app}"; Flags: ignoreversion
+Source: "C:\Users\Sarwar_Hossain\Desktop\github-ssh-manager\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "C:\Users\Sarwar_Hossain\Desktop\github-ssh-manager\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "C:\Users\Sarwar_Hossain\Desktop\github-ssh-manager\icon.png"; DestDir: "{app}"; Flags: ignoreversion
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
