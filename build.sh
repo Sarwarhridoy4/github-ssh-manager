@@ -1,23 +1,7 @@
 #!/bin/bash
 # =====================================================================
 # GitHub SSH Manager Build & Package Script (Debian + AppImage)
-#
-# Features:
-#   ✅ Tray icon support
-#   ✅ Multi-size screenshots
-#   ✅ Automatic version from Git tags
-#   ✅ Git commit hash embedded in binary
-#   ✅ AppID support
-#   ✅ Builds .deb and AppImage packages
-#
-# Usage:
-#   ./build-all.sh [version]
-#
-# Author : Sarwar Hossain
-# Email  : sarwarhridoy4@gmail.com
-# Repo   : https://github.com/Sarwarhridoy4/github-ssh-manager
 # =====================================================================
-
 APP_NAME="github-ssh-manager"
 APP_ID="com.sarwar.githubsshmanager"
 
@@ -48,9 +32,9 @@ DESCRIPTION_LONG="A cross-platform GUI tool built with Go and Fyne to manage mul
 echo "📦 Building ${APP_NAME} version ${VERSION} (commit ${GIT_HASH}) for ${ARCH}"
 
 # =====================================================================
-# Step 0: Install required build tools
+# Step 0: Install required tools
 # =====================================================================
-echo "🔧 Installing required tools..."
+echo "🔧 Installing build dependencies..."
 sudo apt-get update
 sudo apt-get install -y imagemagick wget dpkg-dev golang-go
 go mod tidy
@@ -61,7 +45,7 @@ go mod tidy
 rm -rf ${APP_NAME}-deb ${APP_NAME}_${VERSION}_${ARCH}.deb ${APP_NAME}.AppDir ${APP_NAME}_${VERSION}_${APPIMAGE_ARCH}.AppImage
 
 # =====================================================================
-# Step 2: Build binary with metadata
+# Step 2: Build Go binary with metadata
 # =====================================================================
 echo "⚙️  Building Go binary..."
 go build -ldflags="-X 'main.AppID=${APP_ID}' -X 'main.GitCommit=${GIT_HASH}'" -o ${APP_NAME}
@@ -70,31 +54,24 @@ go build -ldflags="-X 'main.AppID=${APP_ID}' -X 'main.GitCommit=${GIT_HASH}'" -o
 # Step 3: Create Debian package
 # =====================================================================
 echo "📦 Creating .deb package..."
-mkdir -p ${APP_NAME}-deb/DEBIAN
-mkdir -p ${APP_NAME}-deb/usr/bin
-mkdir -p ${APP_NAME}-deb/usr/share/applications
-mkdir -p ${APP_NAME}-deb/usr/share/icons/hicolor
-mkdir -p ${APP_NAME}-deb/usr/share/${APP_NAME}/screenshots
-
+mkdir -p ${APP_NAME}-deb/DEBIAN ${APP_NAME}-deb/usr/bin ${APP_NAME}-deb/usr/share/applications ${APP_NAME}-deb/usr/share/icons/hicolor ${APP_NAME}-deb/usr/share/${APP_NAME}/screenshots
 cp ${APP_NAME} ${APP_NAME}-deb/usr/bin/
 
-# --- Screenshots ---
+# Screenshots resizing
 if [ -f "screenshot.png" ]; then
-    SCREENSHOT_SIZES=(320 640 1280)
-    for SIZE in "${SCREENSHOT_SIZES[@]}"; do
+    for SIZE in 320 640 1280; do
         convert screenshot.png -resize ${SIZE}x ${APP_NAME}-deb/usr/share/${APP_NAME}/screenshots/screenshot_${SIZE}.png
     done
 fi
 
-# --- Icons ---
-ICON_SIZES=(16 22 24 32 48 64 128 256 512)
-for SIZE in "${ICON_SIZES[@]}"; do
+# Icons resizing
+for SIZE in 16 22 24 32 48 64 128 256 512; do
     ICON_DIR=${APP_NAME}-deb/usr/share/icons/hicolor/${SIZE}x${SIZE}/apps
     mkdir -p ${ICON_DIR}
     convert icon.png -resize ${SIZE}x${SIZE} ${ICON_DIR}/${APP_NAME}.png
 done
 
-# --- Control file ---
+# Control file
 cat <<EOF > ${APP_NAME}-deb/DEBIAN/control
 Package: ${APP_NAME}
 Version: ${VERSION}
@@ -107,35 +84,27 @@ Description: ${DESCRIPTION_SHORT}
  ${DESCRIPTION_LONG}
 EOF
 
-# --- postinst script ---
+# postinst
 cat <<'EOF' > ${APP_NAME}-deb/DEBIAN/postinst
 #!/bin/bash
 set -e
-if command -v update-desktop-database &> /dev/null; then
-    update-desktop-database -q
-fi
-if command -v gtk-update-icon-cache &> /dev/null; then
-    gtk-update-icon-cache -q /usr/share/icons/hicolor
-fi
+command -v update-desktop-database &>/dev/null && update-desktop-database -q
+command -v gtk-update-icon-cache &>/dev/null && gtk-update-icon-cache -q /usr/share/icons/hicolor
 exit 0
 EOF
 chmod 755 ${APP_NAME}-deb/DEBIAN/postinst
 
-# --- prerm script ---
+# prerm
 cat <<'EOF' > ${APP_NAME}-deb/DEBIAN/prerm
 #!/bin/bash
 set -e
-if command -v update-desktop-database &> /dev/null; then
-    update-desktop-database -q
-fi
-if command -v gtk-update-icon-cache &> /dev/null; then
-    gtk-update-icon-cache -q /usr/share/icons/hicolor
-fi
+command -v update-desktop-database &>/dev/null && update-desktop-database -q
+command -v gtk-update-icon-cache &>/dev/null && gtk-update-icon-cache -q /usr/share/icons/hicolor
 exit 0
 EOF
 chmod 755 ${APP_NAME}-deb/DEBIAN/prerm
 
-# --- Desktop entry ---
+# Desktop entry
 cat <<EOF > ${APP_NAME}-deb/usr/share/applications/${APP_NAME}.desktop
 [Desktop Entry]
 Name=GitHub SSH Manager
@@ -150,6 +119,7 @@ X-AppID=${APP_ID}
 X-AppInstall-Screenshot=/usr/share/${APP_NAME}/screenshots/screenshot_640.png
 EOF
 
+# Build .deb
 dpkg-deb --build ${APP_NAME}-deb
 mv ${APP_NAME}-deb.deb ${APP_NAME}_${VERSION}_${ARCH}.deb
 echo "✅ .deb package created: ${APP_NAME}_${VERSION}_${ARCH}.deb"
@@ -158,10 +128,7 @@ echo "✅ .deb package created: ${APP_NAME}_${VERSION}_${ARCH}.deb"
 # Step 4: Create AppImage
 # =====================================================================
 echo "📦 Creating AppImage..."
-mkdir -p ${APP_NAME}.AppDir/usr/bin
-mkdir -p ${APP_NAME}.AppDir/usr/share/icons/hicolor
-mkdir -p ${APP_NAME}.AppDir/usr/share/applications
-mkdir -p ${APP_NAME}.AppDir/usr/share/${APP_NAME}/screenshots
+mkdir -p ${APP_NAME}.AppDir/usr/bin ${APP_NAME}.AppDir/usr/share/icons/hicolor ${APP_NAME}.AppDir/usr/share/applications ${APP_NAME}.AppDir/usr/share/${APP_NAME}/screenshots
 
 cp ${APP_NAME} ${APP_NAME}.AppDir/${APP_NAME}
 chmod +x ${APP_NAME}.AppDir/${APP_NAME}
@@ -169,7 +136,7 @@ ln -sf ${APP_NAME} ${APP_NAME}.AppDir/AppRun
 
 # Screenshots
 if [ -f "screenshot.png" ]; then
-    for SIZE in "${SCREENSHOT_SIZES[@]}"; do
+    for SIZE in 320 640 1280; do
         convert screenshot.png -resize ${SIZE}x ${APP_NAME}.AppDir/usr/share/${APP_NAME}/screenshots/screenshot_${SIZE}.png
     done
 fi
@@ -191,12 +158,12 @@ EOF
 
 # Icons
 cp icon.png ${APP_NAME}.AppDir/${APP_NAME}.png
-for SIZE in "${ICON_SIZES[@]}"; do
+for SIZE in 16 22 24 32 48 64 128 256 512; do
     mkdir -p ${APP_NAME}.AppDir/usr/share/icons/hicolor/${SIZE}x${SIZE}/apps
     convert icon.png -resize ${SIZE}x${SIZE} ${APP_NAME}.AppDir/usr/share/icons/hicolor/${SIZE}x${SIZE}/apps/${APP_NAME}.png
 done
 
-# AppImageTool
+# Download appimagetool if missing
 if ! command -v appimagetool &> /dev/null; then
     echo "⬇️ Downloading appimagetool..."
     wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${APPIMAGE_ARCH}.AppImage -O appimagetool
