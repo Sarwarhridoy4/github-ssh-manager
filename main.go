@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -51,6 +53,10 @@ func main() {
 	labelEntry := widget.NewEntry()
 	labelEntry.SetPlaceHolder("Account label (e.g. personal, work)")
 
+	hostEntry := widget.NewEntry()
+	hostEntry.SetPlaceHolder("Host alias (e.g. github-linux)")
+	hostEntry.SetText("github-linux") // default
+
 	tokenEntry := widget.NewPasswordEntry()
 	tokenEntry.SetPlaceHolder("GitHub PAT (admin:public_key, repo)")
 
@@ -67,6 +73,7 @@ func main() {
 
 2. Generate SSH Key:
    - Enter a label (e.g. personal, work)
+   - Enter a host alias (e.g. github-linux)
    - Click "Generate Key"
 
 3. Show Public Key:
@@ -90,13 +97,19 @@ func main() {
 			dialog.ShowError(fmt.Errorf("please enter a label"), w)
 			return
 		}
-		keyPath := filepath.Join(sshDir, "id_ed25519_"+label)
-		if _, err := os.Stat(keyPath); err == nil {
-			dialog.ShowInformation("Info", "key already exists: "+keyPath, w)
+		hostAlias := hostEntry.Text
+		if hostAlias == "" {
+			dialog.ShowError(fmt.Errorf("please enter a host alias"), w)
 			return
 		}
 
-		// Generate the SSH key with error capture
+		keyPath := filepath.Join(sshDir, "id_ed25519_"+label)
+		if _, err := os.Stat(keyPath); err == nil {
+			dialog.ShowInformation("Info", "Key already exists: "+keyPath, w)
+			return
+		}
+
+		// Generate the SSH key
 		cmd := exec.Command("ssh-keygen", "-t", "ed25519", "-C", label+"@github", "-f", keyPath, "-N", "")
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
@@ -115,8 +128,7 @@ func main() {
 			f.Write(out)
 		}
 
-		// Update SSH config with fixed alias
-		hostAlias := "github-linux"
+		// Update SSH config with user-defined host alias
 		appendConfig(configFile, hostAlias, "github.com", keyPath)
 		dialog.ShowInformation("Success", "SSH key generated, config updated, and github.com added to known_hosts:\n"+keyPath, w)
 	})
@@ -147,7 +159,7 @@ func main() {
 		dialog.ShowCustom("Public Key - "+label, "Close", container.NewVBox(pubEntry, copyBtn), w)
 	})
 
-	// Upload Key via PAT
+	// Upload Key via PAT with user-friendly messages
 	uploadBtn := widget.NewButtonWithIcon("Upload Key", theme.UploadIcon(), func() {
 		label := labelEntry.Text
 		if label == "" {
@@ -168,7 +180,7 @@ func main() {
 		}
 
 		apiURL := "https://api.github.com/user/keys"
-		jsonData := fmt.Sprintf(`{"title":"%s-%s","key":"%s"}`, label, "fyne-app", strings.TrimSpace(string(pub)))
+		jsonData := fmt.Sprintf(`{"title":"%s-%s","key":"%s"}`, label, hostEntry.Text, strings.TrimSpace(string(pub)))
 		cmd := exec.Command("curl", "-s", "-H", "Authorization: token "+token,
 			"-H", "Accept: application/vnd.github+json", apiURL, "-d", jsonData)
 
@@ -179,12 +191,31 @@ func main() {
 			return
 		}
 
-		dialog.ShowInformation("Response", out.String(), w)
+		// Parse JSON response
+		var resp map[string]interface{}
+		if err := json.Unmarshal(out.Bytes(), &resp); err != nil {
+			dialog.ShowInformation("Response", string(out.Bytes()), w)
+			return
+		}
+
+		// Show user-friendly message
+		if resp["id"] != nil {
+			dialog.ShowInformation("Success", fmt.Sprintf("SSH Key uploaded successfully!\nTitle: %s", resp["title"]), w)
+		} else if resp["message"] != nil {
+			dialog.ShowError(fmt.Errorf("Error: %s", resp["message"]), w)
+		} else {
+			dialog.ShowInformation("Response", string(out.Bytes()), w)
+		}
 	})
 
-	// Test SSH Connection using fixed alias
+	// Test SSH Connection
 	testBtn := widget.NewButtonWithIcon("Test SSH", theme.ConfirmIcon(), func() {
-		hostAlias := "github-linux"
+		hostAlias := hostEntry.Text
+		if hostAlias == "" {
+			dialog.ShowError(fmt.Errorf("please enter a host alias"), w)
+			return
+		}
+
 		cmd := exec.Command("ssh", "-T", "git@"+hostAlias)
 		var out, stderr bytes.Buffer
 		cmd.Stdout = &out
@@ -196,7 +227,7 @@ func main() {
 		dialog.ShowInformation("SSH Test", out.String(), w)
 	})
 
-	// View SSH Config
+	// View SSH Config (professional modal)
 	viewConfigBtn := widget.NewButtonWithIcon("View SSH Config", theme.DocumentIcon(), func() {
 		cfg, err := ioutil.ReadFile(configFile)
 		if err != nil {
@@ -204,11 +235,12 @@ func main() {
 			return
 		}
 
-		cfgEntry := widget.NewMultiLineEntry()
-		cfgEntry.SetText(string(cfg))
-		cfgEntry.SetMinRowsVisible(15)
-		cfgEntry.Wrapping = fyne.TextWrapWord
-		cfgEntry.Disable() // read-only
+		cfgLabel := widget.NewLabel(string(cfg))
+		cfgLabel.Wrapping = fyne.TextWrapWord
+		cfgLabel.TextStyle.Monospace = true
+
+		scrollContainer := container.NewVScroll(cfgLabel)
+		scrollContainer.SetMinSize(fyne.NewSize(600, 400))
 
 		copyBtn := widget.NewButtonWithIcon("Copy Config", theme.ContentCopyIcon(), func() {
 			w.Clipboard().SetContent(string(cfg))
@@ -217,17 +249,17 @@ func main() {
 
 		modalContent := container.NewVBox(
 			widget.NewLabelWithStyle("~/.ssh/config", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-			container.NewPadded(cfgEntry),
-			copyBtn,
+			container.NewPadded(scrollContainer),
+			container.NewHBox(layout.NewSpacer(), copyBtn),
 		)
 
-		dialog.ShowCustom("SSH Config Viewer", "Close",
-			container.NewBorder(nil, nil, nil, nil, container.NewPadded(modalContent)), w)
+		dialog.ShowCustom("SSH Config Viewer", "Close", modalContent, w)
 	})
 
 	// Layout
 	form := container.NewVBox(
 		labelEntry,
+		hostEntry,
 		tokenEntry,
 		genBtn,
 		showPubBtn,
