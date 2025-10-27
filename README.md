@@ -39,39 +39,39 @@ A cross-platform GUI tool built with **Go** and **Fyne** that allows you to mana
 
 ### 1. Main Window
 
-![Main Window](screenshots/main_window.png)
+![Main Window](screenshots/Home_Page.png)
 
 _Enter your label and PAT, then generate or manage SSH keys easily._
 
 ### 2. Generate Key(Local with config)
 
-![Generate Key](screenshots/generate_key.png)
+![Generate Key](screenshots/Key_Generate.png)
 _Generate SSH KEY with config_
 
 ### 3. Public Key Viewer
 
-![Public Key Viewer](screenshots/public_key.png)
+![Public Key Viewer](screenshots/Show_Public_Key.png)
 
 _View your public key and copy it to clipboard._
 
 ### 4. Upload to GitHub with Personal Access Token(PAT Classic)
 
-![Upload Key to GitHub](screenshots/upload_response.png)
+![Upload Key to GitHub](screenshots/Upload_to_github_via_token(classic).png)
 _Upload to GitHub with Personal Access Token(PAT Classic)._
 
 ### 5. SSH Connection test(Success)
 
-![SSH Connection test(Success)](screenshots/test_ssh.png)
+![SSH Connection test(Success)](screenshots/SSH_connection_test.png)
 _SSH Connection test(Success)_
 
 ### 6. View SSH Config/Copy
 
-![View SSH Config/Copy](screenshots/ssh_config.png)
+![View SSH Config/Copy](screenshots/Show_Configs.png)
 _View SSH Config/Copy_
 
 ### 6. Show Instructions/Help
 
-![Show Instructions/Help](screenshots/instruction_popup.png)
+![Show Instructions/Help](screenshots/User_Instructions.png)
 _Show Instructions/Help_
 
 ---
