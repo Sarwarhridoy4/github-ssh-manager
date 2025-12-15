@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -21,23 +22,38 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+var logBuffer *widget.Entry
+
 func main() {
 	a := app.New()
 	w := a.NewWindow("GitHub SSH Manager")
-	w.Resize(fyne.NewSize(750, 600))
+	w.Resize(fyne.NewSize(900, 700))
+
+	// Initialize logger
+	logBuffer = widget.NewMultiLineEntry()
+	logBuffer.Disable()
+	logBuffer.Wrapping = fyne.TextWrapWord
+	logBuffer.SetMinRowsVisible(8)
+
+	logInfo("Application started")
+	logInfo(fmt.Sprintf("Operating System: %s", runtime.GOOS))
 
 	// Determine SSH directory cross-platform
 	sshDir, err := getSSHDirectory()
 	if err != nil {
+		logError(fmt.Sprintf("Failed to determine SSH directory: %v", err))
 		dialog.ShowError(err, w)
 		return
 	}
+	logInfo(fmt.Sprintf("SSH Directory: %s", sshDir))
 
 	// Ensure .ssh directory exists with proper permissions
 	if err := os.MkdirAll(sshDir, 0700); err != nil {
+		logError(fmt.Sprintf("Failed to create .ssh directory: %v", err))
 		dialog.ShowError(fmt.Errorf("failed to create .ssh directory: %v", err), w)
 		return
 	}
+	logSuccess("SSH directory verified/created")
 
 	configFile := filepath.Join(sshDir, "config")
 
@@ -71,31 +87,40 @@ func main() {
 	genBtn := widget.NewButtonWithIcon("Generate SSH Key", theme.DocumentCreateIcon(), func() {
 		label := strings.TrimSpace(labelEntry.Text)
 		if label == "" {
+			logError("Generate Key: Label is empty")
 			dialog.ShowError(fmt.Errorf("please enter a label"), w)
 			return
 		}
 		hostAlias := strings.TrimSpace(hostEntry.Text)
 		if hostAlias == "" {
+			logError("Generate Key: Host alias is empty")
 			dialog.ShowError(fmt.Errorf("please enter a host alias"), w)
 			return
 		}
 
+		logInfo(fmt.Sprintf("Generating SSH key for label: %s, host: %s", label, hostAlias))
+
 		keyPath := filepath.Join(sshDir, "id_ed25519_"+label)
 		if _, err := os.Stat(keyPath); err == nil {
+			logWarning(fmt.Sprintf("Key already exists: %s", keyPath))
 			dialog.ShowInformation("Info", "Key already exists: "+keyPath, w)
 			return
 		}
 
 		// Generate the SSH key
+		logInfo("Executing ssh-keygen command...")
 		cmd := exec.Command("ssh-keygen", "-t", "ed25519", "-C", label+"@github", "-f", keyPath, "-N", "")
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 		if err := cmd.Run(); err != nil {
+			logError(fmt.Sprintf("ssh-keygen failed: %v - %s", err, stderr.String()))
 			dialog.ShowError(fmt.Errorf("keygen failed: %v\n%s", err, stderr.String()), w)
 			return
 		}
+		logSuccess(fmt.Sprintf("SSH key pair generated: %s", keyPath))
 
 		// Add GitHub to known_hosts
+		logInfo("Adding github.com to known_hosts...")
 		knownHostsPath := filepath.Join(sshDir, "known_hosts")
 		scanCmd := exec.Command("ssh-keyscan", "github.com")
 		out, err := scanCmd.Output()
@@ -104,11 +129,17 @@ func main() {
 			if f != nil {
 				defer f.Close()
 				f.Write(out)
+				logSuccess("GitHub added to known_hosts")
 			}
+		} else {
+			logWarning(fmt.Sprintf("Failed to add GitHub to known_hosts: %v", err))
 		}
 
 		// Update SSH config with user-defined host alias
+		logInfo(fmt.Sprintf("Updating SSH config with host alias: %s", hostAlias))
 		appendConfig(configFile, hostAlias, "github.com", keyPath)
+		logSuccess("SSH config updated successfully")
+		
 		dialog.ShowInformation("Success", fmt.Sprintf("✓ SSH key generated\n✓ Config updated\n✓ GitHub added to known_hosts\n\nKey: %s", keyPath), w)
 	})
 	genBtn.Importance = widget.HighImportance
@@ -116,15 +147,20 @@ func main() {
 	showPubBtn := widget.NewButtonWithIcon("Show Public Key", theme.VisibilityIcon(), func() {
 		label := strings.TrimSpace(labelEntry.Text)
 		if label == "" {
+			logError("Show Public Key: Label is empty")
 			dialog.ShowError(fmt.Errorf("please enter a label"), w)
 			return
 		}
+		
+		logInfo(fmt.Sprintf("Reading public key for label: %s", label))
 		pubKeyPath := filepath.Join(sshDir, "id_ed25519_"+label+".pub")
 		pub, err := ioutil.ReadFile(pubKeyPath)
 		if err != nil {
+			logError(fmt.Sprintf("Cannot read public key: %v", err))
 			dialog.ShowError(fmt.Errorf("cannot read public key: %v", err), w)
 			return
 		}
+		logSuccess(fmt.Sprintf("Public key loaded: %s", pubKeyPath))
 
 		pubEntry := widget.NewMultiLineEntry()
 		pubEntry.SetText(string(pub))
@@ -133,6 +169,7 @@ func main() {
 
 		copyBtn := widget.NewButtonWithIcon("Copy to Clipboard", theme.ContentCopyIcon(), func() {
 			w.Clipboard().SetContent(string(pub))
+			logInfo("Public key copied to clipboard")
 			dialog.ShowInformation("Copied", "✓ Public key copied to clipboard", w)
 		})
 		copyBtn.Importance = widget.HighImportance
@@ -150,23 +187,29 @@ func main() {
 	uploadBtn := widget.NewButtonWithIcon("Upload to GitHub", theme.UploadIcon(), func() {
 		label := strings.TrimSpace(labelEntry.Text)
 		if label == "" {
+			logError("Upload Key: Label is empty")
 			dialog.ShowError(fmt.Errorf("please enter a label"), w)
 			return
 		}
 		token := strings.TrimSpace(tokenEntry.Text)
 		if token == "" {
+			logError("Upload Key: GitHub PAT is empty")
 			dialog.ShowError(fmt.Errorf("please enter your GitHub Personal Access Token"), w)
 			return
 		}
 		hostAlias := strings.TrimSpace(hostEntry.Text)
 		if hostAlias == "" {
+			logError("Upload Key: Host alias is empty")
 			dialog.ShowError(fmt.Errorf("please enter a host alias"), w)
 			return
 		}
 
+		logInfo(fmt.Sprintf("Uploading SSH key to GitHub for label: %s", label))
+
 		pubKeyPath := filepath.Join(sshDir, "id_ed25519_"+label+".pub")
 		pub, err := ioutil.ReadFile(pubKeyPath)
 		if err != nil {
+			logError(fmt.Sprintf("No public key found: %v", err))
 			dialog.ShowError(fmt.Errorf("no public key found (generate key first): %v", err), w)
 			return
 		}
@@ -174,12 +217,15 @@ func main() {
 		apiURL := "https://api.github.com/user/keys"
 		keyTitle := label + "-" + hostAlias
 		jsonData := fmt.Sprintf(`{"title":"%s","key":"%s"}`, keyTitle, strings.TrimSpace(string(pub)))
+		
+		logInfo(fmt.Sprintf("Making API request to GitHub (key title: %s)...", keyTitle))
 		cmd := exec.Command("curl", "-s", "-H", "Authorization: token "+token,
 			"-H", "Accept: application/vnd.github+json", apiURL, "-d", jsonData)
 
 		var out bytes.Buffer
 		cmd.Stdout = &out
 		if err := cmd.Run(); err != nil {
+			logError(fmt.Sprintf("Upload failed: %v", err))
 			dialog.ShowError(fmt.Errorf("upload failed: %v", err), w)
 			return
 		}
@@ -187,16 +233,20 @@ func main() {
 		// Parse JSON response
 		var resp map[string]interface{}
 		if err := json.Unmarshal(out.Bytes(), &resp); err != nil {
+			logWarning(fmt.Sprintf("Could not parse GitHub API response: %v", err))
 			dialog.ShowInformation("Response", string(out.Bytes()), w)
 			return
 		}
 
 		// Show user-friendly message
 		if resp["id"] != nil {
+			logSuccess(fmt.Sprintf("SSH key uploaded successfully (ID: %.0f)", resp["id"]))
 			dialog.ShowInformation("Success", fmt.Sprintf("✓ SSH Key uploaded successfully!\n\nTitle: %s\nID: %.0f", resp["title"], resp["id"]), w)
 		} else if resp["message"] != nil {
+			logError(fmt.Sprintf("GitHub API Error: %s", resp["message"]))
 			dialog.ShowError(fmt.Errorf("GitHub API Error: %s", resp["message"]), w)
 		} else {
+			logWarning("Unexpected API response received")
 			dialog.ShowInformation("Response", string(out.Bytes()), w)
 		}
 	})
@@ -205,10 +255,12 @@ func main() {
 	testBtn := widget.NewButtonWithIcon("Test SSH Connection", theme.ConfirmIcon(), func() {
 		hostAlias := strings.TrimSpace(hostEntry.Text)
 		if hostAlias == "" {
+			logError("Test SSH: Host alias is empty")
 			dialog.ShowError(fmt.Errorf("please enter a host alias"), w)
 			return
 		}
 
+		logInfo(fmt.Sprintf("Testing SSH connection to git@%s...", hostAlias))
 		cmd := exec.Command("ssh", "-T", "git@"+hostAlias)
 		var out, stderr bytes.Buffer
 		cmd.Stdout = &out
@@ -219,18 +271,23 @@ func main() {
 		
 		combinedOutput := stderr.String() + out.String()
 		if strings.Contains(combinedOutput, "successfully authenticated") {
+			logSuccess(fmt.Sprintf("SSH connection successful to %s", hostAlias))
 			dialog.ShowInformation("Success", "✓ SSH connection successful!\n\n"+combinedOutput, w)
 		} else {
+			logError(fmt.Sprintf("SSH test failed: %s", combinedOutput))
 			dialog.ShowError(fmt.Errorf("SSH test failed:\n%s", combinedOutput), w)
 		}
 	})
 
 	viewConfigBtn := widget.NewButtonWithIcon("View SSH Config", theme.DocumentIcon(), func() {
+		logInfo("Opening SSH config viewer...")
 		cfg, err := ioutil.ReadFile(configFile)
 		if err != nil {
+			logError(fmt.Sprintf("Cannot read SSH config: %v", err))
 			dialog.ShowError(fmt.Errorf("cannot read SSH config: %v", err), w)
 			return
 		}
+		logSuccess(fmt.Sprintf("SSH config loaded (%d bytes)", len(cfg)))
 
 		cfgLabel := widget.NewLabel(string(cfg))
 		cfgLabel.Wrapping = fyne.TextWrapWord
@@ -241,6 +298,7 @@ func main() {
 
 		copyBtn := widget.NewButtonWithIcon("Copy to Clipboard", theme.ContentCopyIcon(), func() {
 			w.Clipboard().SetContent(string(cfg))
+			logInfo("SSH config copied to clipboard")
 			dialog.ShowInformation("Copied", "✓ SSH config copied to clipboard", w)
 		})
 
@@ -267,6 +325,7 @@ func main() {
 
 	// Help button with hyperlink
 	helpBtn := widget.NewButtonWithIcon("Help & Instructions", theme.HelpIcon(), func() {
+		logInfo("Opening help dialog")
 		instructions := widget.NewRichTextFromMarkdown(`## GitHub SSH Manager Instructions
 
 ### 1. Generate a Personal Access Token (PAT)
@@ -312,8 +371,70 @@ Click "View SSH Config" to see your SSH config file
 		dialog.ShowCustom("Help & Instructions", "Close", modalContent, w)
 	})
 
-	// Footer
+	// Logger section
 	separator3 := widget.NewSeparator()
+	loggerLabel := widget.NewLabelWithStyle("Activity Log", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	
+	logScroll := container.NewVScroll(logBuffer)
+	logScroll.SetMinSize(fyne.NewSize(0, 150))
+
+	// Logger controls
+	clearLogBtn := widget.NewButtonWithIcon("Clear Log", theme.DeleteIcon(), func() {
+		logBuffer.SetText("")
+		logInfo("Log cleared")
+	})
+
+	saveLogBtn := widget.NewButtonWithIcon("Save Log", theme.DocumentSaveIcon(), func() {
+		logInfo("Opening save dialog...")
+		saveDialog := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
+			if err != nil {
+				logError(fmt.Sprintf("Save dialog error: %v", err))
+				dialog.ShowError(err, w)
+				return
+			}
+			if writer == nil {
+				logWarning("Save operation cancelled")
+				return
+			}
+			defer writer.Close()
+
+			timestamp := time.Now().Format("2006-01-02 15:04:05")
+			header := fmt.Sprintf("GitHub SSH Manager - Activity Log\nGenerated: %s\n%s\n\n", timestamp, strings.Repeat("=", 60))
+			
+			content := header + logBuffer.Text
+			_, err = writer.Write([]byte(content))
+			if err != nil {
+				logError(fmt.Sprintf("Failed to write log file: %v", err))
+				dialog.ShowError(fmt.Errorf("failed to save log: %v", err), w)
+				return
+			}
+			
+			logSuccess(fmt.Sprintf("Log saved to: %s", writer.URI().Path()))
+			dialog.ShowInformation("Saved", "✓ Log saved successfully!", w)
+		}, w)
+		
+		saveDialog.SetFileName(fmt.Sprintf("ssh-manager-log-%s.txt", time.Now().Format("2006-01-02-150405")))
+		saveDialog.Show()
+	})
+	saveLogBtn.Importance = widget.HighImportance
+
+	logControls := container.NewHBox(
+		loggerLabel,
+		layout.NewSpacer(),
+		clearLogBtn,
+		saveLogBtn,
+	)
+
+	loggerSection := container.NewBorder(
+		logControls,
+		nil,
+		nil,
+		nil,
+		logScroll,
+	)
+
+	// Footer
+	separator4 := widget.NewSeparator()
 	footerLabel := widget.NewLabel("SSH Directory: " + sshDir)
 	footerLabel.TextStyle.Italic = true
 
@@ -332,6 +453,8 @@ Click "View SSH Config" to see your SSH config file
 		container.NewPadded(viewConfigBtn),
 		container.NewPadded(helpBtn),
 		separator3,
+		container.NewPadded(loggerSection),
+		separator4,
 		container.NewPadded(footerLabel),
 	)
 
@@ -339,6 +462,35 @@ Click "View SSH Config" to see your SSH config file
 	w.SetContent(scroll)
 	w.SetIcon(theme.ComputerIcon())
 	w.ShowAndRun()
+}
+
+// Logging functions
+func logInfo(message string) {
+	timestamp := time.Now().Format("15:04:05")
+	logMessage := fmt.Sprintf("[%s] ℹ INFO: %s\n", timestamp, message)
+	logBuffer.SetText(logBuffer.Text + logMessage)
+	logBuffer.CursorRow = len(strings.Split(logBuffer.Text, "\n"))
+}
+
+func logSuccess(message string) {
+	timestamp := time.Now().Format("15:04:05")
+	logMessage := fmt.Sprintf("[%s] ✓ SUCCESS: %s\n", timestamp, message)
+	logBuffer.SetText(logBuffer.Text + logMessage)
+	logBuffer.CursorRow = len(strings.Split(logBuffer.Text, "\n"))
+}
+
+func logError(message string) {
+	timestamp := time.Now().Format("15:04:05")
+	logMessage := fmt.Sprintf("[%s] ✗ ERROR: %s\n", timestamp, message)
+	logBuffer.SetText(logBuffer.Text + logMessage)
+	logBuffer.CursorRow = len(strings.Split(logBuffer.Text, "\n"))
+}
+
+func logWarning(message string) {
+	timestamp := time.Now().Format("15:04:05")
+	logMessage := fmt.Sprintf("[%s] ⚠ WARNING: %s\n", timestamp, message)
+	logBuffer.SetText(logBuffer.Text + logMessage)
+	logBuffer.CursorRow = len(strings.Split(logBuffer.Text, "\n"))
 }
 
 // getSSHDirectory returns the .ssh directory path based on the OS
@@ -367,6 +519,7 @@ func getSSHDirectory() (string, error) {
 func appendConfig(configFile, hostAlias, hostName, keyPath string) {
 	content, _ := ioutil.ReadFile(configFile)
 	if strings.Contains(string(content), "Host "+hostAlias) {
+		logWarning(fmt.Sprintf("Host alias '%s' already exists in config", hostAlias))
 		return // already exists
 	}
 	entry := fmt.Sprintf("\nHost %s\n  HostName %s\n  IdentityFile %s\n  AddKeysToAgent yes\n  IdentitiesOnly yes\n",
