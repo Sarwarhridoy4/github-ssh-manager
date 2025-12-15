@@ -234,7 +234,7 @@ func main() {
 		var resp map[string]interface{}
 		if err := json.Unmarshal(out.Bytes(), &resp); err != nil {
 			logWarning(fmt.Sprintf("Could not parse GitHub API response: %v", err))
-			dialog.ShowInformation("Response", string(out.Bytes()), w)
+			dialog.ShowInformation("Response", out.String(), w)
 			return
 		}
 
@@ -247,7 +247,7 @@ func main() {
 			dialog.ShowError(fmt.Errorf("GitHub API Error: %s", resp["message"]), w)
 		} else {
 			logWarning("Unexpected API response received")
-			dialog.ShowInformation("Response", string(out.Bytes()), w)
+			dialog.ShowInformation("Response", out.String(), w)
 		}
 	})
 	uploadBtn.Importance = widget.HighImportance
