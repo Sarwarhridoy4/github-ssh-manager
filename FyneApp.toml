@@ -1,12 +1,4 @@
-# Fyne App Configuration
-name = "GitHub SSH Manager"
-id = "com.sarwarhridoy4.githubsshmanager"
-version = "1.1.0"
-description = "A simple SSH manager for GitHub repositories."
-author = "Sarwar Hossain"
-icon = "assets/icon.png"
-main = "main.go"
-license = "MIT"
+Description = "A simple SSH manager for GitHub repositories."
 
-# Optional settings
-release = true
+[Details]
+Build = 3
