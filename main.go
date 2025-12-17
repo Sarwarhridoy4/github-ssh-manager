@@ -15,6 +15,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
@@ -22,21 +23,39 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-var logBuffer *widget.Entry
+var logContainer *fyne.Container
+var mainWindow fyne.Window
 
 func main() {
+	// Check for admin privileges on Windows
+	if runtime.GOOS == "windows" {
+		if !isAdmin() {
+			// Relaunch with admin privileges
+			err := runAsAdmin()
+			if err != nil {
+				// Show error dialog before exiting
+				a := app.New()
+				w := a.NewWindow("Admin Required")
+				dialog.ShowError(fmt.Errorf(" Failed to elevate privileges: %v\n\nPlease run as administrator", err), w)
+				w.ShowAndRun()
+			}
+			return
+		}
+	}
+
 	a := app.New()
 	w := a.NewWindow("GitHub SSH Manager")
 	w.Resize(fyne.NewSize(900, 700))
+	mainWindow = w
 
-	// Initialize logger
-	logBuffer = widget.NewMultiLineEntry()
-	logBuffer.Disable()
-	logBuffer.Wrapping = fyne.TextWrapWord
-	logBuffer.SetMinRowsVisible(8)
+	// Initialize logger container
+	logContainer = container.NewVBox()
 
 	logInfo("Application started")
 	logInfo(fmt.Sprintf("Operating System: %s", runtime.GOOS))
+	if runtime.GOOS == "windows" && isAdmin() {
+		logSuccess("Running with administrator privileges")
+	}
 
 	// Determine SSH directory cross-platform
 	sshDir, err := getSSHDirectory()
@@ -375,12 +394,13 @@ Click "View SSH Config" to see your SSH config file
 	separator3 := widget.NewSeparator()
 	loggerLabel := widget.NewLabelWithStyle("Activity Log", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	
-	logScroll := container.NewVScroll(logBuffer)
+	logScroll := container.NewVScroll(logContainer)
 	logScroll.SetMinSize(fyne.NewSize(0, 150))
 
 	// Logger controls
 	clearLogBtn := widget.NewButtonWithIcon("Clear Log", theme.DeleteIcon(), func() {
-		logBuffer.SetText("")
+		logContainer.Objects = nil
+		logContainer.Refresh()
 		logInfo("Log cleared")
 	})
 
@@ -401,7 +421,16 @@ Click "View SSH Config" to see your SSH config file
 			timestamp := time.Now().Format("2006-01-02 15:04:05")
 			header := fmt.Sprintf("GitHub SSH Manager - Activity Log\nGenerated: %s\n%s\n\n", timestamp, strings.Repeat("=", 60))
 			
-			content := header + logBuffer.Text
+			// Extract text from log container
+			var logText strings.Builder
+			for _, obj := range logContainer.Objects {
+				if label, ok := obj.(*canvas.Text); ok {
+					logText.WriteString(label.Text)
+					logText.WriteString("\n")
+				}
+			}
+			
+			content := header + logText.String()
 			_, err = writer.Write([]byte(content))
 			if err != nil {
 				logError(fmt.Sprintf("Failed to write log file: %v", err))
@@ -464,33 +493,62 @@ Click "View SSH Config" to see your SSH config file
 	w.ShowAndRun()
 }
 
-// Logging functions
+// Logging functions with theme-aware colors
 func logInfo(message string) {
 	timestamp := time.Now().Format("15:04:05")
-	logMessage := fmt.Sprintf("[%s] ℹ INFO: %s\n", timestamp, message)
-	logBuffer.SetText(logBuffer.Text + logMessage)
-	logBuffer.CursorRow = len(strings.Split(logBuffer.Text, "\n"))
+	logMessage := fmt.Sprintf("[%s] ℹ INFO: %s", timestamp, message)
+	
+	text := canvas.NewText(logMessage, theme.Color(theme.ColorNamePrimary))
+	text.TextStyle.Monospace = true
+	logContainer.Add(text)
+	logContainer.Refresh()
+	
+	// Auto-scroll to bottom
+	if mainWindow != nil {
+		mainWindow.Canvas().Refresh(logContainer)
+	}
 }
 
 func logSuccess(message string) {
 	timestamp := time.Now().Format("15:04:05")
-	logMessage := fmt.Sprintf("[%s] ✓ SUCCESS: %s\n", timestamp, message)
-	logBuffer.SetText(logBuffer.Text + logMessage)
-	logBuffer.CursorRow = len(strings.Split(logBuffer.Text, "\n"))
+	logMessage := fmt.Sprintf("[%s] ✓ SUCCESS: %s", timestamp, message)
+	
+	text := canvas.NewText(logMessage, theme.SuccessColor())
+	text.TextStyle.Monospace = true
+	logContainer.Add(text)
+	logContainer.Refresh()
+	
+	if mainWindow != nil {
+		mainWindow.Canvas().Refresh(logContainer)
+	}
 }
 
 func logError(message string) {
 	timestamp := time.Now().Format("15:04:05")
-	logMessage := fmt.Sprintf("[%s] ✗ ERROR: %s\n", timestamp, message)
-	logBuffer.SetText(logBuffer.Text + logMessage)
-	logBuffer.CursorRow = len(strings.Split(logBuffer.Text, "\n"))
+	logMessage := fmt.Sprintf("[%s] ✗ ERROR: %s", timestamp, message)
+	
+	text := canvas.NewText(logMessage, theme.Color(theme.ColorNameError))
+	text.TextStyle.Monospace = true
+	logContainer.Add(text)
+	logContainer.Refresh()
+	
+	if mainWindow != nil {
+		mainWindow.Canvas().Refresh(logContainer)
+	}
 }
 
 func logWarning(message string) {
 	timestamp := time.Now().Format("15:04:05")
-	logMessage := fmt.Sprintf("[%s] ⚠ WARNING: %s\n", timestamp, message)
-	logBuffer.SetText(logBuffer.Text + logMessage)
-	logBuffer.CursorRow = len(strings.Split(logBuffer.Text, "\n"))
+	logMessage := fmt.Sprintf("[%s] ⚠ WARNING: %s", timestamp, message)
+	
+	text := canvas.NewText(logMessage, theme.Color(theme.ColorNameWarning))
+	text.TextStyle.Monospace = true
+	logContainer.Add(text)
+	logContainer.Refresh()
+	
+	if mainWindow != nil {
+		mainWindow.Canvas().Refresh(logContainer)
+	}
 }
 
 // getSSHDirectory returns the .ssh directory path based on the OS
@@ -515,6 +573,19 @@ func getSSHDirectory() (string, error) {
 	return filepath.Join(homeDir, ".ssh"), nil
 }
 
+// toUnixPath converts Windows paths to Unix-style paths for SSH config
+func toUnixPath(path string) string {
+	if runtime.GOOS == "windows" {
+		// Replace backslashes with forward slashes
+		path = strings.ReplaceAll(path, "\\", "/")
+		// Handle Windows drive letters (C: -> /c/)
+		if len(path) >= 2 && path[1] == ':' {
+			path = "/" + strings.ToLower(string(path[0])) + path[2:]
+		}
+	}
+	return path
+}
+
 // appendConfig ensures ~/.ssh/config contains a Host block for this key
 func appendConfig(configFile, hostAlias, hostName, keyPath string) {
 	content, _ := ioutil.ReadFile(configFile)
@@ -522,11 +593,47 @@ func appendConfig(configFile, hostAlias, hostName, keyPath string) {
 		logWarning(fmt.Sprintf("Host alias '%s' already exists in config", hostAlias))
 		return // already exists
 	}
+	
+	// Convert Windows path to Unix-style for SSH config
+	configKeyPath := toUnixPath(keyPath)
+	
 	entry := fmt.Sprintf("\nHost %s\n  HostName %s\n  IdentityFile %s\n  AddKeysToAgent yes\n  IdentitiesOnly yes\n",
-		hostAlias, hostName, keyPath)
+		hostAlias, hostName, configKeyPath)
 	f, _ := os.OpenFile(configFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if f != nil {
 		defer f.Close()
 		f.WriteString(entry)
 	}
+}
+
+// Windows admin privilege functions
+func isAdmin() bool {
+	if runtime.GOOS != "windows" {
+		return true // Not Windows, assume sufficient privileges
+	}
+	
+	// Try to open a privileged path to test admin rights
+	_, err := os.Open("\\\\.\\PHYSICALDRIVE0")
+	return err == nil
+}
+
+func runAsAdmin() error {
+	if runtime.GOOS != "windows" {
+		return nil
+	}
+	
+	// Get the executable path
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	
+	// Use PowerShell to elevate
+	verb := "Start-Process"
+	args := fmt.Sprintf("-Verb RunAs -FilePath '%s'", exe)
+	
+	cmd := exec.Command("powershell", "-Command", verb, args)
+	err = cmd.Start()
+	
+	return err
 }
