@@ -5,9 +5,9 @@ LOCAL != test -d $(DESTDIR)/usr/local && echo -n "/local" || echo -n ""
 LOCAL ?= $(shell test -d $(DESTDIR)/usr/local && echo "/local" || echo "")
 PREFIX ?= /usr$(LOCAL)
 
-AppID := ""
+AppID := "com.sarwarhridoy4.github-ssh-manager"
 Exec := "github-ssh-manager"
-Icon := ".png"
+Icon := "com.sarwarhridoy4.github-ssh-manager.png"
 
 default:
 	# User install

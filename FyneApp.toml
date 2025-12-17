@@ -1,35 +1,14 @@
-# Optional metadata for apps.fyne.io listing
 Website = "https://github.com/Sarwarhridoy4/github-ssh-manager"
 
 [Details]
-# Application icon (relative path from FyneApp.toml location)
 Icon = "icon.png"
-
-# Application display name
 Name = "GitHub SSH Manager"
-
-# Unique application identifier (reverse domain notation)
 ID = "com.sarwarhridoy4.github-ssh-manager"
-
-# Application version (semantic versioning recommended)
 Version = "2.0.0"
-
-# Build number (increment with each build)
-Build = 1
+Build = 2
 
 [LinuxAndBSD]
-# Generic name for the application category
 GenericName = "SSH Key Manager"
-
-# Desktop entry categories (must be valid freedesktop.org categories)
-# See: https://specifications.freedesktop.org/menu-spec/latest/apa.html
 Categories = ["Development", "Network", "Utility"]
-
-# Short description of the application
 Comment = "Manage SSH keys for GitHub accounts"
-
-# Keywords for desktop search
 Keywords = ["ssh", "github", "key", "manager", "git", "security"]
-
-# Optional execution parameters
-# ExecParams = ""
