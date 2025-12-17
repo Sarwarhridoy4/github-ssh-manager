@@ -513,13 +513,14 @@ Click "View SSH Config" to see your SSH config file
 func logInfo(message string) {
 	timestamp := time.Now().Format("15:04:05")
 	logMessage := fmt.Sprintf("[%s] ℹ INFO: %s", timestamp, message)
-	
-	text := canvas.NewText(logMessage, theme.Color(theme.ColorNamePrimary))
+	wrapped := wrapText(logMessage, 110)
+
+	text := canvas.NewText(wrapped, theme.Color(theme.ColorNamePrimary))
 	text.TextStyle.Monospace = true
+	text.Alignment = fyne.TextAlignLeading
 	logContainer.Add(text)
 	logContainer.Refresh()
-	
-	// Auto-scroll to bottom
+
 	if mainWindow != nil {
 		mainWindow.Canvas().Refresh(logContainer)
 	}
@@ -528,12 +529,14 @@ func logInfo(message string) {
 func logSuccess(message string) {
 	timestamp := time.Now().Format("15:04:05")
 	logMessage := fmt.Sprintf("[%s] ✓ SUCCESS: %s", timestamp, message)
-	
-	text := canvas.NewText(logMessage, theme.SuccessColor())
+	wrapped := wrapText(logMessage, 110)
+
+	text := canvas.NewText(wrapped, theme.SuccessColor())
 	text.TextStyle.Monospace = true
+	text.Alignment = fyne.TextAlignLeading
 	logContainer.Add(text)
 	logContainer.Refresh()
-	
+
 	if mainWindow != nil {
 		mainWindow.Canvas().Refresh(logContainer)
 	}
@@ -542,12 +545,14 @@ func logSuccess(message string) {
 func logError(message string) {
 	timestamp := time.Now().Format("15:04:05")
 	logMessage := fmt.Sprintf("[%s] ✗ ERROR: %s", timestamp, message)
-	
-	text := canvas.NewText(logMessage, theme.Color(theme.ColorNameError))
+	wrapped := wrapText(logMessage, 110)
+
+	text := canvas.NewText(wrapped, theme.Color(theme.ColorNameError))
 	text.TextStyle.Monospace = true
+	text.Alignment = fyne.TextAlignLeading
 	logContainer.Add(text)
 	logContainer.Refresh()
-	
+
 	if mainWindow != nil {
 		mainWindow.Canvas().Refresh(logContainer)
 	}
@@ -556,12 +561,14 @@ func logError(message string) {
 func logWarning(message string) {
 	timestamp := time.Now().Format("15:04:05")
 	logMessage := fmt.Sprintf("[%s] ⚠ WARNING: %s", timestamp, message)
-	
-	text := canvas.NewText(logMessage, theme.Color(theme.ColorNameWarning))
+	wrapped := wrapText(logMessage, 110)
+
+	text := canvas.NewText(wrapped, theme.Color(theme.ColorNameWarning))
 	text.TextStyle.Monospace = true
+	text.Alignment = fyne.TextAlignLeading
 	logContainer.Add(text)
 	logContainer.Refresh()
-	
+
 	if mainWindow != nil {
 		mainWindow.Canvas().Refresh(logContainer)
 	}
@@ -677,4 +684,31 @@ func runAsAdmin() error {
 	err = cmd.Start()
 	
 	return err
+}
+
+// wrapText wraps long log lines for clean display
+func wrapText(text string, maxWidth int) string {
+	if len(text) <= maxWidth {
+		return text
+	}
+
+	var builder strings.Builder
+	words := strings.Fields(text)
+	currentLen := 0
+
+	for _, word := range words {
+		wordLen := len(word)
+		if currentLen+wordLen+1 > maxWidth && currentLen > 0 {
+			builder.WriteString("\n        ") // indent wrapped lines
+			currentLen = 8
+		} else if currentLen > 0 {
+			builder.WriteString(" ")
+			currentLen++
+		}
+
+		builder.WriteString(word)
+		currentLen += wordLen
+	}
+
+	return builder.String()
 }
