@@ -187,7 +187,7 @@ func main() {
 		pubEntry.Wrapping = fyne.TextWrapBreak
 
 		copyBtn := widget.NewButtonWithIcon("Copy to Clipboard", theme.ContentCopyIcon(), func() {
-			w.Clipboard().SetContent(string(pub))
+			a.Clipboard().SetContent(string(pub))
 			logInfo("Public key copied to clipboard")
 			dialog.ShowInformation("Copied", "✓ Public key copied to clipboard", w)
 		})
@@ -298,17 +298,33 @@ func main() {
 		}
 	})
 
-	viewConfigBtn := widget.NewButtonWithIcon("View SSH Config", theme.DocumentIcon(), func() {
+		viewConfigBtn := widget.NewButtonWithIcon("View SSH Config", theme.DocumentIcon(), func() {
 		logInfo("Opening SSH config viewer...")
-		cfg, err := ioutil.ReadFile(configFile)
+
+		// Ensure config file exists (create empty if not)
+		if _, err := os.Stat(configFile); os.IsNotExist(err) {
+			if f, createErr := os.Create(configFile); createErr == nil {
+				f.Close()
+				os.Chmod(configFile, 0600)
+				logInfo("Created empty SSH config file")
+			}
+		}
+
+		cfg, err := os.ReadFile(configFile)
 		if err != nil {
 			logError(fmt.Sprintf("Cannot read SSH config: %v", err))
 			dialog.ShowError(fmt.Errorf("cannot read SSH config: %v", err), w)
 			return
 		}
+
+		content := string(cfg)
+		if content == "" {
+			content = "# SSH config file is empty\n# Generate a key to add entries\n"
+		}
+
 		logSuccess(fmt.Sprintf("SSH config loaded (%d bytes)", len(cfg)))
 
-		cfgLabel := widget.NewLabel(string(cfg))
+		cfgLabel := widget.NewLabel(content)
 		cfgLabel.Wrapping = fyne.TextWrapWord
 		cfgLabel.TextStyle.Monospace = true
 
@@ -316,7 +332,7 @@ func main() {
 		scrollContainer.SetMinSize(fyne.NewSize(600, 400))
 
 		copyBtn := widget.NewButtonWithIcon("Copy to Clipboard", theme.ContentCopyIcon(), func() {
-			w.Clipboard().SetContent(string(cfg))
+			a.Clipboard().SetContent(content)
 			logInfo("SSH config copied to clipboard")
 			dialog.ShowInformation("Copied", "✓ SSH config copied to clipboard", w)
 		})
@@ -588,21 +604,46 @@ func toUnixPath(path string) string {
 
 // appendConfig ensures ~/.ssh/config contains a Host block for this key
 func appendConfig(configFile, hostAlias, hostName, keyPath string) {
-	content, _ := ioutil.ReadFile(configFile)
-	if strings.Contains(string(content), "Host "+hostAlias) {
-		logWarning(fmt.Sprintf("Host alias '%s' already exists in config", hostAlias))
-		return // already exists
+	// Read existing content to check for duplicate Host entry
+	var hostExists bool
+	var configContent string // will hold file content as string for searching
+
+	if data, err := os.ReadFile(configFile); err == nil {
+		configContent = string(data)
+		// More robust check for existing Host block
+		hostExists = strings.Contains(configContent, "\nHost "+hostAlias+"\n") ||
+		             strings.Contains(configContent, "\nHost "+hostAlias+" ") ||
+		             strings.HasPrefix(configContent, "Host "+hostAlias)
+	} else {
+		// File doesn't exist — that's okay, we'll create it
+		configContent = ""
+		hostExists = false
 	}
-	
-	// Convert Windows path to Unix-style for SSH config
-	configKeyPath := toUnixPath(keyPath)
-	
+
+	if hostExists {
+		logWarning(fmt.Sprintf("Host alias '%s' already exists in config", hostAlias))
+		return
+	}
+
+	// Convert Windows path to Unix-style and quote it safely
+	unixKeyPath := toUnixPath(keyPath)
+	quotedKeyPath := fmt.Sprintf(`"%s"`, unixKeyPath)
+
 	entry := fmt.Sprintf("\nHost %s\n  HostName %s\n  IdentityFile %s\n  AddKeysToAgent yes\n  IdentitiesOnly yes\n",
-		hostAlias, hostName, configKeyPath)
-	f, _ := os.OpenFile(configFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if f != nil {
-		defer f.Close()
-		f.WriteString(entry)
+		hostAlias, hostName, quotedKeyPath)
+
+	// Append (or create) the config file
+	f, err := os.OpenFile(configFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		logError(fmt.Sprintf("Failed to open config file for writing: %v", err))
+		return
+	}
+	defer f.Close()
+
+	if _, err := f.WriteString(entry); err != nil {
+		logError(fmt.Sprintf("Failed to write to config file: %v", err))
+	} else {
+		logSuccess("SSH config updated successfully")
 	}
 }
 
