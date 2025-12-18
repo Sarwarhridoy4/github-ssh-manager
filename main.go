@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"os/exec"
@@ -173,7 +172,7 @@ func main() {
 		
 		logInfo(fmt.Sprintf("Reading public key for label: %s", label))
 		pubKeyPath := filepath.Join(sshDir, "id_ed25519_"+label+".pub")
-		pub, err := ioutil.ReadFile(pubKeyPath)
+		pub, err := os.ReadFile(pubKeyPath)
 		if err != nil {
 			logError(fmt.Sprintf("Cannot read public key: %v", err))
 			dialog.ShowError(fmt.Errorf("cannot read public key: %v", err), w)
@@ -226,7 +225,7 @@ func main() {
 		logInfo(fmt.Sprintf("Uploading SSH key to GitHub for label: %s", label))
 
 		pubKeyPath := filepath.Join(sshDir, "id_ed25519_"+label+".pub")
-		pub, err := ioutil.ReadFile(pubKeyPath)
+		pub, err := os.ReadFile(pubKeyPath)
 		if err != nil {
 			logError(fmt.Sprintf("No public key found: %v", err))
 			dialog.ShowError(fmt.Errorf("no public key found (generate key first): %v", err), w)
@@ -298,7 +297,7 @@ func main() {
 		}
 	})
 
-		viewConfigBtn := widget.NewButtonWithIcon("View SSH Config", theme.DocumentIcon(), func() {
+	viewConfigBtn := widget.NewButtonWithIcon("View SSH Config", theme.DocumentIcon(), func() {
 		logInfo("Opening SSH config viewer...")
 
 		// Ensure config file exists (create empty if not)
@@ -410,8 +409,9 @@ Click "View SSH Config" to see your SSH config file
 	separator3 := widget.NewSeparator()
 	loggerLabel := widget.NewLabelWithStyle("Activity Log", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	
+	// Create log scroll with FIXED height to prevent window expansion
 	logScroll := container.NewVScroll(logContainer)
-	logScroll.SetMinSize(fyne.NewSize(0, 150))
+	logScroll.SetMinSize(fyne.NewSize(0, 180))
 
 	// Logger controls
 	clearLogBtn := widget.NewButtonWithIcon("Clear Log", theme.DeleteIcon(), func() {
@@ -509,15 +509,16 @@ Click "View SSH Config" to see your SSH config file
 	w.ShowAndRun()
 }
 
-// Logging functions with theme-aware colors
+// Logging functions with theme-aware colors and proper text wrapping
 func logInfo(message string) {
 	timestamp := time.Now().Format("15:04:05")
 	logMessage := fmt.Sprintf("[%s] ℹ INFO: %s", timestamp, message)
-	wrapped := wrapText(logMessage, 110)
 
-	text := canvas.NewText(wrapped, theme.Color(theme.ColorNamePrimary))
+	text := canvas.NewText(logMessage, theme.Color(theme.ColorNamePrimary))
 	text.TextStyle.Monospace = true
 	text.Alignment = fyne.TextAlignLeading
+	text.TextSize = 11 // Smaller text to fit more content
+	
 	logContainer.Add(text)
 	logContainer.Refresh()
 
@@ -529,11 +530,12 @@ func logInfo(message string) {
 func logSuccess(message string) {
 	timestamp := time.Now().Format("15:04:05")
 	logMessage := fmt.Sprintf("[%s] ✓ SUCCESS: %s", timestamp, message)
-	wrapped := wrapText(logMessage, 110)
 
-	text := canvas.NewText(wrapped, theme.SuccessColor())
+	text := canvas.NewText(logMessage, theme.SuccessColor())
 	text.TextStyle.Monospace = true
 	text.Alignment = fyne.TextAlignLeading
+	text.TextSize = 11
+	
 	logContainer.Add(text)
 	logContainer.Refresh()
 
@@ -545,11 +547,12 @@ func logSuccess(message string) {
 func logError(message string) {
 	timestamp := time.Now().Format("15:04:05")
 	logMessage := fmt.Sprintf("[%s] ✗ ERROR: %s", timestamp, message)
-	wrapped := wrapText(logMessage, 110)
 
-	text := canvas.NewText(wrapped, theme.Color(theme.ColorNameError))
+	text := canvas.NewText(logMessage, theme.Color(theme.ColorNameError))
 	text.TextStyle.Monospace = true
 	text.Alignment = fyne.TextAlignLeading
+	text.TextSize = 11
+	
 	logContainer.Add(text)
 	logContainer.Refresh()
 
@@ -561,11 +564,12 @@ func logError(message string) {
 func logWarning(message string) {
 	timestamp := time.Now().Format("15:04:05")
 	logMessage := fmt.Sprintf("[%s] ⚠ WARNING: %s", timestamp, message)
-	wrapped := wrapText(logMessage, 110)
 
-	text := canvas.NewText(wrapped, theme.Color(theme.ColorNameWarning))
+	text := canvas.NewText(logMessage, theme.Color(theme.ColorNameWarning))
 	text.TextStyle.Monospace = true
 	text.Alignment = fyne.TextAlignLeading
+	text.TextSize = 11
+	
 	logContainer.Add(text)
 	logContainer.Refresh()
 
@@ -684,31 +688,4 @@ func runAsAdmin() error {
 	err = cmd.Start()
 	
 	return err
-}
-
-// wrapText wraps long log lines for clean display
-func wrapText(text string, maxWidth int) string {
-	if len(text) <= maxWidth {
-		return text
-	}
-
-	var builder strings.Builder
-	words := strings.Fields(text)
-	currentLen := 0
-
-	for _, word := range words {
-		wordLen := len(word)
-		if currentLen+wordLen+1 > maxWidth && currentLen > 0 {
-			builder.WriteString("\n        ") // indent wrapped lines
-			currentLen = 8
-		} else if currentLen > 0 {
-			builder.WriteString(" ")
-			currentLen++
-		}
-
-		builder.WriteString(word)
-		currentLen += wordLen
-	}
-
-	return builder.String()
 }
