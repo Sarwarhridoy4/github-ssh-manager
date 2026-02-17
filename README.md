@@ -21,6 +21,8 @@ A cross-platform GUI tool built with **Go** and **Fyne** that allows you to mana
   - [macOS](#macos)
   - [Windows](#windows)
 - [Running from Source](#️-running-from-source)
+- [Project Structure](#-project-structure)
+- [Working Flow](#-working-flow)
 - [Building from Source](#-building-from-source)
 - [Usage Instructions](#-usage-instructions)
 - [Uninstallation](#️-uninstallation)
@@ -208,7 +210,6 @@ github-ssh-manager.exe
 - **Go >= 1.22**
 - **Git**
 - **SSH tools** (`ssh-keygen`, `ssh`)
-- **cURL** (for GitHub API uploads)
 - **Fyne dependencies** (handled automatically via Go modules)
 
 ### Run from Source
@@ -217,10 +218,70 @@ github-ssh-manager.exe
 git clone https://github.com/Sarwarhridoy4/github-ssh-manager.git
 cd github-ssh-manager
 go mod tidy
-go run main.go
+go run .
 ```
 
 The GUI window will open, allowing you to manage your GitHub SSH keys.
+
+---
+
+## 📁 Project Structure
+
+```text
+github-ssh-manager/
+├── main.go              # App bootstrap and startup wiring
+├── ui.go                # Main UI layout, actions, and dialogs/modals
+├── ssh.go               # SSH key generation, config, known_hosts operations
+├── github.go            # GitHub API client for SSH key upload
+├── validation.go        # Input validation and security checks
+├── logging.go           # In-app activity logger
+├── theme_switch.go      # Theme switching (System/Light/Dark)
+├── assets/
+│   └── icon.png
+├── screenshots/
+├── build.sh
+├── build.ps1
+├── go.mod
+└── README.md
+```
+
+---
+
+## 🔄 Working Flow
+
+```mermaid
+flowchart TD
+    A[Launch App] --> B[Resolve ~/.ssh Path Cross-Platform]
+    B --> C[Create/Verify .ssh Directory]
+    C --> D[User Inputs Label + Host Alias + PAT]
+
+    D --> E{Action Selected}
+
+    E -->|Generate Key| F[Validate Label + Host Alias]
+    F --> G[Run ssh-keygen for id_ed25519_label]
+    G --> H[Ensure github.com in known_hosts]
+    H --> I[Append/Ensure Host Block in ~/.ssh/config]
+    I --> J[Log Success + Update Status]
+
+    E -->|Show Public Key| K[Read id_ed25519_label.pub]
+    K --> L[Open Public Key Modal]
+
+    E -->|Upload to GitHub| M[Validate Inputs + Token]
+    M --> N[Read Public Key]
+    N --> O[POST /user/keys to GitHub API]
+    O --> P{Upload Result}
+    P -->|Success| Q[Show Success Modal + Clear Token Field]
+    P -->|Failure| R[Show Error Modal + Log Error]
+
+    E -->|Test SSH| S[Run ssh -T git@host-alias]
+    S --> T{Authenticated?}
+    T -->|Yes| U[Show Success Modal]
+    T -->|No| V[Show Error Modal]
+
+    E -->|View Config| W[Open SSH Config Modal]
+    E -->|Instructions| X[Open Help Modal]
+    E -->|Theme| Y[Apply System or Forced Light/Dark Theme]
+```
 
 ---
 
@@ -454,7 +515,6 @@ rm ~/.ssh/id_ed25519_<label>.pub
 ### Runtime Dependencies
 
 - **System SSH tools**: `ssh-keygen`, `ssh`, `ssh-keyscan`
-- **cURL**: For GitHub API uploads
 - **FUSE** (Linux AppImage only): For mounting AppImage files
 
 ### Build Dependencies
