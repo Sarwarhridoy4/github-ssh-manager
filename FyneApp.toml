@@ -4,8 +4,8 @@ Website = "https://github.com/Sarwarhridoy4/github-ssh-manager"
 Icon = "icon.png"
 Name = "GitHub SSH Manager"
 ID = "com.sarwarhridoy4.github-ssh-manager"
-Version = "2.0.0"
-Build = 8
+Version = "2.5"
+Build = 13
 
 [LinuxAndBSD]
 GenericName = "SSH Key Manager"

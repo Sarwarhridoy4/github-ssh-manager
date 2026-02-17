@@ -1,9 +1,9 @@
 # ================================================
 # GitHub SSH Manager - Windows Build Script
 # Usage:
-#   .\build.ps1 [version]
+#   .\build.ps1 [-Version x.y.z] [-Build n]
 # Example:
-#   .\build.ps1 1.0.0
+#   .\build.ps1 -Version 1.0.0 -Build 10
 #
 # This script:
 #   1. Uses FyneApp.toml for metadata
@@ -18,6 +18,7 @@
 
 param(
     [string]$Version = "",
+    [string]$Build = "",
     [switch]$SkipClean = $false,
     [switch]$Release = $false
 )
@@ -67,13 +68,26 @@ $tomlContent = Get-Content "FyneApp.toml" -Raw
 $AppName = if ($tomlContent -match 'Name\s*=\s*"([^"]+)"') { $Matches[1] } else { "github-ssh-manager" }
 $AppID = if ($tomlContent -match 'ID\s*=\s*"([^"]+)"') { $Matches[1] } else { "com.sarwarhridoy4.github-ssh-manager" }
 $TomlVersion = if ($tomlContent -match 'Version\s*=\s*"([^"]+)"') { $Matches[1] } else { "1.0.0" }
-$BuildNum = if ($tomlContent -match 'Build\s*=\s*(\d+)') { $Matches[1] } else { "1" }
+$TomlBuildNum = if ($tomlContent -match 'Build\s*=\s*(\d+)') { $Matches[1] } else { "1" }
 $IconFile = if ($tomlContent -match 'Icon\s*=\s*"([^"]+)"') { $Matches[1] } else { "Icon.png" }
 
 # Use version from parameter or TOML
 if ([string]::IsNullOrEmpty($Version)) {
     $Version = $TomlVersion
     Write-Info "Using version from FyneApp.toml: $Version"
+}
+
+# Use build number from parameter or TOML
+if ([string]::IsNullOrEmpty($Build)) {
+    $BuildNum = $TomlBuildNum
+    Write-Info "Using build number from FyneApp.toml: $BuildNum"
+} else {
+    if ($Build -notmatch '^\d+$') {
+        Write-Error2 "Build must be numeric, got: $Build"
+        exit 1
+    }
+    $BuildNum = $Build
+    Write-Info "Using build number from parameter: $BuildNum"
 }
 
 # -------------------------------
@@ -293,9 +307,9 @@ Copy-Item "..\..\$IconFile" . -Force
 
 # Run fyne package (uses FyneApp.toml automatically)
 if ($Release) {
-    & $fynePath package -os windows -release
+    & $fynePath package -os windows -app-version $Version -app-build $BuildNum -release
 } else {
-    & $fynePath package -os windows
+    & $fynePath package -os windows -app-version $Version -app-build $BuildNum
 }
 
 # Clean up copied files
