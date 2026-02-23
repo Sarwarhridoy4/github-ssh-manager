@@ -109,10 +109,10 @@ Download the `.deb` package from the [releases page](https://github.com/Sarwarhr
 
 ```bash
 # Download the latest release (replace version number)
-wget https://github.com/Sarwarhridoy4/github-ssh-manager/releases/download/v1.0.1/github-ssh-manager_1.0.1_amd64.deb
+wget https://github.com/Sarwarhridoy4/github-ssh-manager/releases/download/v2.5/github-ssh-manager_2.5_amd64.deb
 
 # Install the package
-sudo dpkg -i github-ssh-manager_1.0.1_amd64.deb
+sudo dpkg -i github-ssh-manager_2.5_amd64.deb
 
 # Fix dependencies if needed
 sudo apt-get install -f
@@ -140,13 +140,13 @@ AppImage is a universal Linux package that runs on most distributions without in
 
 ```bash
 # Download the latest release
-wget https://github.com/Sarwarhridoy4/github-ssh-manager/releases/download/v1.0.1/github-ssh-manager-1.0.1-x86_64.AppImage
+wget https://github.com/Sarwarhridoy4/github-ssh-manager/releases/download/v2.5/github-ssh-manager-2.5-x86_64.AppImage
 
 # Make it executable
-chmod +x github-ssh-manager-1.0.1-x86_64.AppImage
+chmod +x github-ssh-manager-2.5-x86_64.AppImage
 
 # Run the application
-./github-ssh-manager-1.0.1-x86_64.AppImage
+./github-ssh-manager-2.5-x86_64.AppImage
 ```
 
 #### Extract Without FUSE
@@ -155,7 +155,7 @@ If you encounter FUSE errors, you can extract and run without FUSE:
 
 ```bash
 # Extract the AppImage
-./github-ssh-manager-1.0.1-x86_64.AppImage --appimage-extract
+./github-ssh-manager-2.5-x86_64.AppImage --appimage-extract
 
 # Run the extracted binary
 ./squashfs-root/AppRun
@@ -175,7 +175,7 @@ For more information, see [FUSE Documentation](https://github.com/AppImage/AppIm
 
 ```bash
 # Download the .app bundle from releases
-wget https://github.com/Sarwarhridoy4/github-ssh-manager/releases/download/v1.0.1/github-ssh-manager.app.zip
+wget https://github.com/Sarwarhridoy4/github-ssh-manager/releases/download/v2.5/github-ssh-manager.app.zip
 
 # Extract
 unzip github-ssh-manager.app.zip
@@ -338,8 +338,8 @@ Notes:
 - If `appimagetool` is missing, it is downloaded locally to `build/tools/` using `wget` or `curl`.
 
 This will create:
-- `dist/github-ssh-manager_1.0.1_amd64.deb` - Debian package
-- `dist/github-ssh-manager-1.0.1-x86_64.AppImage` - Universal Linux package
+- `dist/github-ssh-manager_2.5_amd64.deb` - Debian package
+- `dist/github-ssh-manager-2.5-x86_64.AppImage` - Universal Linux package
 - `dist/SHA256SUMS` - Checksums for verification
 - `dist/MD5SUMS` - MD5 checksums
 
@@ -351,8 +351,8 @@ This will create:
 fyne package --os linux \
     --icon assets/icon.png \
     --name "GitHub SSH Manager" \
-    --app-id "com.sarwarhridoy4.githubsshmanager" \
-    --app-version 1.0.1 \
+    --app-id "com.sarwarhridoy4.github-ssh-manager" \
+    --app-version 2.5 \
     --release
 ```
 
@@ -362,8 +362,8 @@ fyne package --os linux \
 fyne package --os darwin \
     --icon assets/icon.png \
     --name "GitHub SSH Manager" \
-    --app-id "com.sarwarhridoy4.githubsshmanager" \
-    --app-version 1.0.1 \
+    --app-id "com.sarwarhridoy4.github-ssh-manager" \
+    --app-version 2.5 \
     --release
 ```
 
@@ -373,8 +373,8 @@ fyne package --os darwin \
 fyne package --os windows \
     --icon assets/icon.png \
     --name "GitHub SSH Manager" \
-    --app-id "com.sarwarhridoy4.githubsshmanager" \
-    --app-version 1.0.1 \
+    --app-id "com.sarwarhridoy4.github-ssh-manager" \
+    --app-version 2.5 \
     --release
 ```
 
@@ -473,7 +473,7 @@ dpkg -l | grep github-ssh-manager
 Simply delete the AppImage file:
 
 ```bash
-rm github-ssh-manager-1.0.1-x86_64.AppImage
+rm github-ssh-manager-2.5-x86_64.AppImage
 ```
 
 If you extracted it:
@@ -556,7 +556,7 @@ sudo apt-get install fuse libfuse2
 
 **Solution 2 - Extract and Run:**
 ```bash
-./github-ssh-manager-1.0.1-x86_64.AppImage --appimage-extract
+./github-ssh-manager-2.5-x86_64.AppImage --appimage-extract
 ./squashfs-root/AppRun
 ```
 
@@ -566,7 +566,7 @@ For more information: [FUSE Documentation](https://github.com/AppImage/AppImageK
 
 Make sure you use `sudo`:
 ```bash
-sudo dpkg -i github-ssh-manager_1.0.1_amd64.deb
+sudo dpkg -i github-ssh-manager_2.5_amd64.deb
 ```
 
 ### Linux: Dependency Issues After Installing .deb
