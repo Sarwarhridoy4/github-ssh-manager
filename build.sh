@@ -129,6 +129,33 @@ try_install_cmd() {
     command -v "$cmd" >/dev/null 2>&1
 }
 
+ensure_appimagetool_ready() {
+    local bin_path="$1"
+
+    if "$bin_path" --version >/dev/null 2>&1; then
+        return 0
+    fi
+
+    log_warning "appimagetool could not run (possibly missing FUSE). Trying --appimage-extract fallback..."
+    local tool_dir
+    local tool_base
+    tool_dir="$(dirname "$bin_path")"
+    tool_base="$(basename "$bin_path")"
+
+    if (cd "$tool_dir" && "./$tool_base" --appimage-extract >/dev/null 2>&1); then
+        if [ -x "${tool_dir}/squashfs-root/AppRun" ]; then
+            APPIMAGETOOL_BIN="${tool_dir}/squashfs-root/AppRun"
+            return 0
+        fi
+        if [ -x "${tool_dir}/squashfs-root/appimagetool" ]; then
+            APPIMAGETOOL_BIN="${tool_dir}/squashfs-root/appimagetool"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
 usage() {
     cat <<EOF
 Usage: ./build.sh [options] [version]
@@ -523,6 +550,10 @@ else
             die "appimagetool not found and neither wget nor curl is available."
         fi
     fi
+fi
+
+if ! ensure_appimagetool_ready "$APPIMAGETOOL_BIN"; then
+    die "appimagetool is not runnable. Install FUSE (libfuse.so.2) or run build on a host with FUSE support."
 fi
 
 ARCH="${APPIMAGE_ARCH}" "$APPIMAGETOOL_BIN" --comp gzip "${APPDIR}" "dist/${APP_SLUG}-${VERSION}-${APPIMAGE_ARCH}.AppImage"
