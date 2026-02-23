@@ -333,6 +333,10 @@ chmod +x build.sh
 ./build.sh
 ```
 
+Notes:
+- The script will auto-install missing build tools when possible (using your system package manager).
+- If `appimagetool` is missing, it is downloaded locally to `build/tools/` using `wget` or `curl`.
+
 This will create:
 - `dist/github-ssh-manager_1.0.1_amd64.deb` - Debian package
 - `dist/github-ssh-manager-1.0.1-x86_64.AppImage` - Universal Linux package

@@ -35,9 +35,98 @@ die() {
     exit 1
 }
 
-require_cmd() {
+detect_pkg_manager() {
+    if command -v apt-get >/dev/null 2>&1; then
+        echo "apt"
+    elif command -v dnf >/dev/null 2>&1; then
+        echo "dnf"
+    elif command -v yum >/dev/null 2>&1; then
+        echo "yum"
+    elif command -v pacman >/dev/null 2>&1; then
+        echo "pacman"
+    elif command -v zypper >/dev/null 2>&1; then
+        echo "zypper"
+    elif command -v apk >/dev/null 2>&1; then
+        echo "apk"
+    else
+        echo ""
+    fi
+}
+
+install_pkgs() {
+    local manager="$1"
+    shift
+    case "$manager" in
+        apt)
+            sudo apt-get update -y
+            sudo apt-get install -y "$@"
+            ;;
+        dnf)
+            sudo dnf install -y "$@"
+            ;;
+        yum)
+            sudo yum install -y "$@"
+            ;;
+        pacman)
+            sudo pacman -Sy --noconfirm "$@"
+            ;;
+        zypper)
+            sudo zypper --non-interactive install "$@"
+            ;;
+        apk)
+            sudo apk add --no-cache "$@"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+ensure_cmd() {
     local cmd="$1"
-    command -v "$cmd" >/dev/null 2>&1 || die "Missing required command: $cmd"
+    local pkg="$2"
+    if command -v "$cmd" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    local manager
+    manager="$(detect_pkg_manager)"
+    if [ -z "$manager" ]; then
+        die "Missing required command: $cmd (no supported package manager found)"
+    fi
+
+    log_warning "Missing required command: $cmd. Attempting to install via ${manager}..."
+    if [ -n "$pkg" ]; then
+        install_pkgs "$manager" "$pkg" || die "Failed to install package: $pkg"
+    else
+        install_pkgs "$manager" "$cmd" || die "Failed to install command: $cmd"
+    fi
+
+    command -v "$cmd" >/dev/null 2>&1 || die "Missing required command after install: $cmd"
+    log_success "Installed: $cmd"
+}
+
+try_install_cmd() {
+    local cmd="$1"
+    local pkg="$2"
+    if command -v "$cmd" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    local manager
+    manager="$(detect_pkg_manager)"
+    if [ -z "$manager" ]; then
+        return 1
+    fi
+
+    log_warning "Attempting to install ${cmd} via ${manager}..."
+    if [ -n "$pkg" ]; then
+        install_pkgs "$manager" "$pkg" || return 1
+    else
+        install_pkgs "$manager" "$cmd" || return 1
+    fi
+
+    command -v "$cmd" >/dev/null 2>&1
 }
 
 usage() {
@@ -197,11 +286,19 @@ echo "  Architecture: $DEB_ARCH / $APPIMAGE_ARCH"
 echo "  Icon        : $ICON_PATH"
 
 log_phase "Validating toolchain"
-require_cmd go
-require_cmd fyne
-require_cmd dpkg-deb
-require_cmd convert
-require_cmd tar
+ensure_cmd go golang
+ensure_cmd tar tar
+ensure_cmd dpkg-deb dpkg
+ensure_cmd convert imagemagick
+
+if ! command -v fyne >/dev/null 2>&1; then
+    log_warning "Missing required command: fyne. Installing via 'go install'..."
+    GOBIN="${GOBIN:-$(go env GOPATH)/bin}"
+    go install fyne.io/tools/cmd/fyne@latest || die "Failed to install fyne CLI"
+    export PATH="$GOBIN:$PATH"
+    command -v fyne >/dev/null 2>&1 || die "fyne not found after install"
+    log_success "Installed: fyne"
+fi
 
 mkdir -p build dist
 rm -rf build/* dist/* "${APP_SLUG}-deb" "${APP_SLUG}.AppDir" "${APP_SLUG}.tar.gz" "${APP_SLUG}.tar.xz"
@@ -396,8 +493,35 @@ else
             -O build/tools/appimagetool
         chmod +x build/tools/appimagetool
         APPIMAGETOOL_BIN="build/tools/appimagetool"
+    elif command -v curl >/dev/null 2>&1; then
+        log_warning "appimagetool not found; downloading local copy to build/tools/"
+        curl -fsSL \
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${APPIMAGE_ARCH}.AppImage" \
+            -o build/tools/appimagetool
+        chmod +x build/tools/appimagetool
+        APPIMAGETOOL_BIN="build/tools/appimagetool"
     else
-        die "appimagetool not found and wget is unavailable. Install appimagetool or wget."
+        log_warning "Neither wget nor curl found; attempting to install one..."
+        if ! try_install_cmd wget wget; then
+            try_install_cmd curl curl || die "Could not install wget or curl"
+        fi
+        if command -v wget >/dev/null 2>&1; then
+            log_warning "appimagetool not found; downloading local copy to build/tools/"
+            wget -q --show-progress \
+                "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${APPIMAGE_ARCH}.AppImage" \
+                -O build/tools/appimagetool
+            chmod +x build/tools/appimagetool
+            APPIMAGETOOL_BIN="build/tools/appimagetool"
+        elif command -v curl >/dev/null 2>&1; then
+            log_warning "appimagetool not found; downloading local copy to build/tools/"
+            curl -fsSL \
+                "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${APPIMAGE_ARCH}.AppImage" \
+                -o build/tools/appimagetool
+            chmod +x build/tools/appimagetool
+            APPIMAGETOOL_BIN="build/tools/appimagetool"
+        else
+            die "appimagetool not found and neither wget nor curl is available."
+        fi
     fi
 fi
 
