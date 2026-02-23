@@ -118,17 +118,16 @@ func buildUI(a fyne.App, w fyne.Window, sshDir string) {
 			return
 		}
 
-		entry := widget.NewMultiLineEntry()
-		entry.SetText(pub)
-		entry.Wrapping = fyne.TextWrapBreak
-		entry.SetMinRowsVisible(5)
+		pubText := widget.NewTextGridFromString(pub)
+		pubText.Scroll = fyne.ScrollBoth
+		pubScroll := container.NewScroll(pubText)
+		pubScroll.SetMinSize(fyne.NewSize(0, 220))
 
 		copyBtn := widget.NewButtonWithIcon("Copy", theme.ContentCopyIcon(), func() {
 			a.Clipboard().SetContent(pub)
 			log.success("Public key copied to clipboard")
 		})
 
-		entry.Disable()
 		body := container.NewBorder(
 			container.NewVBox(
 				widget.NewLabelWithStyle("Public key for "+label, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
@@ -138,7 +137,7 @@ func buildUI(a fyne.App, w fyne.Window, sshDir string) {
 			container.NewHBox(layout.NewSpacer(), copyBtn),
 			nil,
 			nil,
-			entry,
+			pubScroll,
 		)
 		d := dialog.NewCustom("Public Key", "Close", body, w)
 		d.Resize(fyne.NewSize(820, 420))
@@ -217,11 +216,10 @@ func buildUI(a fyne.App, w fyne.Window, sshDir string) {
 			cfg = "# SSH config is empty\n"
 		}
 
-		cfgText := widget.NewMultiLineEntry()
-		cfgText.SetText(cfg)
-		cfgText.Wrapping = fyne.TextWrapOff
-		cfgText.Disable()
-		cfgText.SetMinRowsVisible(14)
+		cfgText := widget.NewTextGridFromString(cfg)
+		cfgText.Scroll = fyne.ScrollBoth
+		cfgScroll := container.NewScroll(cfgText)
+		cfgScroll.SetMinSize(fyne.NewSize(0, 340))
 
 		copyBtn := widget.NewButtonWithIcon("Copy Config", theme.ContentCopyIcon(), func() {
 			a.Clipboard().SetContent(cfg)
@@ -236,7 +234,7 @@ func buildUI(a fyne.App, w fyne.Window, sshDir string) {
 			container.NewHBox(layout.NewSpacer(), copyBtn),
 			nil,
 			nil,
-			cfgText,
+			cfgScroll,
 		)
 		d := dialog.NewCustom("SSH Config", "Close", body, w)
 		d.Resize(fyne.NewSize(900, 520))
