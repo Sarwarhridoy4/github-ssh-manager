@@ -251,7 +251,38 @@ func buildUI(a fyne.App, w fyne.Window, sshDir string) {
 3. Upload the key to GitHub.
 4. Test SSH connection.
 
-Security notes:
+## Field Guide
+
+- **Label**: Friendly name for the key (e.g., "work", "personal"). Used to name the key in GitHub.
+- **Host Alias**: The SSH host name you will use in git URLs. This is the most important field.
+
+## Host Alias Details
+
+Use a unique alias per GitHub account, for example:
+- ` + "`github-work`" + `, ` + "`github-personal`" + `, ` + "`gh-company`" + `
+
+Your SSH config will look like:
+
+` + "```" + `
+Host github-work
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/<label>-<alias>
+  AddKeysToAgent yes
+  IdentitiesOnly yes
+` + "```" + `
+
+Then use it in git remotes like:
+- ` + "`git@github-work:org/repo.git`" + `
+
+Notes:
+- Alias must be 1-128 characters using letters, numbers, ".", "-", "_".
+- Alias must not be ` + "`github.com`" + `.
+- If the alias already exists in ` + "`~/.ssh/config`" + `, it will not be duplicated.
+- You can view the generated config via **View Config**.
+
+## Token & Security Notes
+
 - Token is used only for a direct HTTPS API call.
 - Token is cleared from the field after upload.
 - Keys and config stay in your local ` + "`~/.ssh`" + `.`)
