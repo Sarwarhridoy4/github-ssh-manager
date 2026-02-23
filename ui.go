@@ -244,56 +244,57 @@ func buildUI(a fyne.App, w fyne.Window, sshDir string) {
 	})
 
 	helpBtn := widget.NewButtonWithIcon("Instructions", theme.HelpIcon(), func() {
-		instructions := widget.NewRichTextFromMarkdown(`## Fast Setup
+		bullet := func(icon fyne.Resource, title, details string) fyne.CanvasObject {
+			titleLabel := widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+			detailLabel := widget.NewLabel(details)
+			detailLabel.Wrapping = fyne.TextWrapWord
+			return container.NewBorder(
+				nil,
+				nil,
+				container.NewPadded(widget.NewIcon(icon)),
+				nil,
+				container.NewVBox(titleLabel, detailLabel),
+			)
+		}
 
-1. Create a GitHub token with scope **admin:public_key** + **repo** (optional).
-2. Enter label + host alias and generate key.
-3. Upload the key to GitHub.
-4. Test SSH connection.
+		fastSetup := widget.NewCard("Fast Setup", "", container.NewVBox(
+			bullet(theme.DocumentCreateIcon(), "1. Create a GitHub token", "Use scope admin:public_key. Add repo only if you need private repository access."),
+			bullet(theme.DocumentIcon(), "2. Fill Label and Host Alias", "Label is the key name; host alias is what you will use in your git remote URL."),
+			bullet(theme.UploadIcon(), "3. Upload key to GitHub", "Upload the generated public key directly using your token."),
+			bullet(theme.ConfirmIcon(), "4. Test SSH connection", "Run the SSH test to verify your setup is working end-to-end."),
+		))
 
-## Field Guide
+		fieldGuide := widget.NewCard("Field Guide", "", container.NewVBox(
+			bullet(theme.InfoIcon(), "Label", "Friendly key name such as work, personal, or company."),
+			bullet(theme.HelpIcon(), "Host Alias", "A unique SSH host alias per account, for example github-work or github-personal."),
+		))
 
-- **Label**: Friendly name for the key (e.g., "work", "personal"). Used to name the key in GitHub.
-- **Host Alias**: The SSH host name you will use in git URLs. This is the most important field.
+		configPreview := widget.NewRichTextFromMarkdown("```sshconfig\nHost github-work\n  HostName github.com\n  User git\n  IdentityFile ~/.ssh/<label>-<alias>\n  AddKeysToAgent yes\n  IdentitiesOnly yes\n```")
+		usagePreview := widget.NewRichTextFromMarkdown("Use in git remote: `git@github-work:org/repo.git`")
+		hostAlias := widget.NewCard("Host Alias Details", "", container.NewVBox(
+			bullet(theme.VisibilityIcon(), "Alias Rules", "Use 1-128 characters with letters, numbers, '.', '-', '_'. Do not use github.com."),
+			bullet(theme.DocumentIcon(), "Config Behavior", "If an alias already exists in ~/.ssh/config, it will not be duplicated."),
+			configPreview,
+			usagePreview,
+		))
 
-## Host Alias Details
+		security := widget.NewCard("Token & Security", "", container.NewVBox(
+			bullet(theme.InfoIcon(), "Token handling", "Token is used only for a direct HTTPS API call and then cleared after upload."),
+			bullet(theme.ConfirmIcon(), "Local files", "Keys and SSH config remain local in ~/.ssh."),
+		))
 
-Use a unique alias per GitHub account, for example:
-- ` + "`github-work`" + `, ` + "`github-personal`" + `, ` + "`gh-company`" + `
-
-Your SSH config will look like:
-
-` + "```" + `
-Host github-work
-  HostName github.com
-  User git
-  IdentityFile ~/.ssh/<label>-<alias>
-  AddKeysToAgent yes
-  IdentitiesOnly yes
-` + "```" + `
-
-Then use it in git remotes like:
-- ` + "`git@github-work:org/repo.git`" + `
-
-Notes:
-- Alias must be 1-128 characters using letters, numbers, ".", "-", "_".
-- Alias must not be ` + "`github.com`" + `.
-- If the alias already exists in ` + "`~/.ssh/config`" + `, it will not be duplicated.
-- You can view the generated config via **View Config**.
-
-## Token & Security Notes
-
-- Token is used only for a direct HTTPS API call.
-- Token is cleared from the field after upload.
-- Keys and config stay in your local ` + "`~/.ssh`" + `.`)
-		instructions.Wrapping = fyne.TextWrapWord
 		linkURL, _ := url.Parse("https://github.com/settings/tokens")
 		link := widget.NewHyperlink("Open GitHub Token Settings", linkURL)
 		copyScopeBtn := widget.NewButtonWithIcon("Copy Required Scopes", theme.ContentCopyIcon(), func() {
 			a.Clipboard().SetContent("admin:public_key, repo")
 			log.success("Token scopes copied to clipboard")
 		})
-		scroll := container.NewVScroll(instructions)
+		scroll := container.NewVScroll(container.NewVBox(
+			fastSetup,
+			fieldGuide,
+			hostAlias,
+			security,
+		))
 		scroll.SetMinSize(fyne.NewSize(760, 420))
 		body := container.NewVBox(
 			scroll,
