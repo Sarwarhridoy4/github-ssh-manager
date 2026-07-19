@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # =====================================================================
 # GitHub SSH Manager - Build and Packaging Script (Linux)
-# Outputs: .tar.gz (Fyne official) + .deb + AppImage
+# Outputs: .deb + AppImage + .tar.gz
+# Uses official fyne package workflow with robust prefix detection.
 # =====================================================================
 
 set -euo pipefail
@@ -262,11 +263,6 @@ print_banner
 log_phase "Loading metadata"
 [ -f FyneApp.toml ] || die "FyneApp.toml not found"
 
-# Read metadata using fyne tool if available, otherwise parse TOML
-if command -v fyne >/dev/null 2>&1; then
-    APP_NAME_DISPLAY="$(fyne package --help 2>/dev/null | grep -oP '(?<=Name: ).*' || true)"
-fi
-
 # Fallback: parse FyneApp.toml manually
 toml_get() {
     local section="$1"
@@ -383,8 +379,19 @@ ensure_cmd convert imagemagick
 ensure_fyne_cli
 
 log_phase "Preparing workspace"
-mkdir -p build dist
-rm -rf build/* dist/* "${APP_SLUG}-deb" "${APP_SLUG}.AppDir" "${APP_SLUG}".tar.gz "${APP_SLUG}".tar.xz
+DIST_DIR="dist"
+WORK_DIR="${DIST_DIR}/work"
+FYNE_ROOT="${WORK_DIR}/fyne-root"
+DEB_ROOT="${WORK_DIR}/deb-root"
+APPDIR="${WORK_DIR}/${APP_SLUG}.AppDir"
+TARBALL_ROOT="${WORK_DIR}/tarball-root"
+
+mkdir -p "${DIST_DIR}" "${WORK_DIR}"
+rm -rf "${FYNE_ROOT}" "${DEB_ROOT}" "${APPDIR}" "${TARBALL_ROOT}"
+rm -f "${DIST_DIR}/${APP_SLUG}_${VERSION}_${DEB_ARCH}.deb" \
+       "${DIST_DIR}/${APP_SLUG}-${VERSION}-${APPIMAGE_ARCH}.AppImage" \
+       "${DIST_DIR}/${APP_SLUG}-${VERSION}-${DEB_ARCH}.tar.gz" \
+       "${APP_SLUG}.tar.xz" "${APP_SLUG}.tar.gz"
 
 log_phase "Resolving Go dependencies"
 go mod tidy
@@ -392,7 +399,6 @@ go mod download
 
 # ---------------------------------------------------------------------
 # Fyne package (official approach)
-# Produces a .tar.gz (or .tar.xz) with usr/local/ layout
 # ---------------------------------------------------------------------
 
 log_phase "Packaging with Fyne (official)"
@@ -404,34 +410,120 @@ fyne package -os linux \
     -app-build "$BUILD_NUMBER" \
     -release
 
-# Extract the Fyne-produced archive
+# ---------------------------------------------------------------------
+# Extract Fyne package into WORK_DIR with prefix detection
+# ---------------------------------------------------------------------
+
+log_phase "Extracting Fyne package"
+mkdir -p "${FYNE_ROOT}"
+
 if [ -f "${APP_SLUG}.tar.gz" ]; then
-    tar -xzf "${APP_SLUG}.tar.gz"
+    tar -xzf "${APP_SLUG}.tar.gz" -C "${FYNE_ROOT}"
 elif [ -f "${APP_SLUG}.tar.xz" ]; then
-    tar -xf "${APP_SLUG}.tar.xz"
+    tar -xf "${APP_SLUG}.tar.xz" -C "${FYNE_ROOT}"
 else
     die "Could not find packaged tar archive from fyne package"
 fi
 
-if [ -f "usr/local/bin/${APP_SLUG}" ]; then
-    mv "usr/local/bin/${APP_SLUG}" "build/${APP_SLUG}"
-    rm -rf usr "${APP_SLUG}.tar.gz" "${APP_SLUG}.tar.xz"
+# Detect prefix
+if [ -d "${FYNE_ROOT}/usr/local" ]; then
+    PREFIX_REL="usr/local"
+elif [ -d "${FYNE_ROOT}/usr" ]; then
+    PREFIX_REL="usr"
 else
-    die "Packaged binary not found at usr/local/bin/${APP_SLUG}"
+    NESTED_USR=$(find "${FYNE_ROOT}" -maxdepth 3 -type d -name "usr" | head -n 1 || true)
+    if [ -z "${NESTED_USR}" ]; then
+        die "No usr directory found after fyne package extraction"
+    fi
+    NESTED_DIR=$(dirname "${NESTED_USR}")
+    PREFIX_REL="${NESTED_DIR#${FYNE_ROOT}/}/usr"
+    if [ -d "${FYNE_ROOT}/${PREFIX_REL}/local" ]; then
+        PREFIX_REL="${PREFIX_REL}/local"
+    fi
 fi
 
-chmod +x "build/${APP_SLUG}"
-log_success "Binary ready: build/${APP_SLUG}"
+log_info "Detected Fyne prefix: ${PREFIX_REL}"
+
+# Normalize directory structure
+USR_NORMALIZED="${WORK_DIR}/usr-normalized"
+mkdir -p "${USR_NORMALIZED}"
+cp -a "${FYNE_ROOT}/${PREFIX_REL}/." "${USR_NORMALIZED}/"
+
+BIN_DIR="${USR_NORMALIZED}/bin"
+APPS_DIR="${USR_NORMALIZED}/share/applications"
+PIXMAPS_DIR="${USR_NORMALIZED}/share/pixmaps"
+
+# Normalize binary name
+FOUND_BIN=$(find "${BIN_DIR}" -maxdepth 1 -type f -executable | head -n 1 || true)
+if [ -z "${FOUND_BIN}" ]; then
+    die "Packaged binary not found under ${BIN_DIR}"
+fi
+if [ "$(basename "${FOUND_BIN}")" != "${APP_SLUG}" ]; then
+    mv "${FOUND_BIN}" "${BIN_DIR}/${APP_SLUG}"
+fi
+BIN_PATH="${BIN_DIR}/${APP_SLUG}"
+chmod +x "${BIN_PATH}"
+log_success "Binary ready: ${BIN_PATH}"
+
+# Find desktop and icon files
+DESKTOP_PATH=$(find "${APPS_DIR}" -name '*.desktop' | head -n 1 || true)
+ICON_PATH=$(find "${PIXMAPS_DIR}" -type f | head -n 1 || true)
+
+if [ -z "${DESKTOP_PATH}" ]; then
+    die "Desktop file not found in Fyne package output"
+fi
+if [ -z "${ICON_PATH}" ]; then
+    die "Icon file not found in Fyne package output"
+fi
+
+# Normalize desktop and icon filenames
+DESKTOP_DIR="$(dirname "${DESKTOP_PATH}")"
+DESKTOP_NORM="${DESKTOP_DIR}/${APP_ID}.desktop"
+if [ "$(basename "${DESKTOP_PATH}")" != "${APP_ID}.desktop" ]; then
+    mv "${DESKTOP_PATH}" "${DESKTOP_NORM}"
+    DESKTOP_PATH="${DESKTOP_NORM}"
+fi
+
+ICON_DIR="$(dirname "${ICON_PATH}")"
+ICON_EXT="${ICON_PATH##*.}"
+ICON_NORM="${ICON_DIR}/${APP_ID}.${ICON_EXT}"
+if [ "$(basename "${ICON_PATH}")" != "${APP_ID}.${ICON_EXT}" ]; then
+    mv "${ICON_PATH}" "${ICON_NORM}"
+    ICON_PATH="${ICON_NORM}"
+fi
+
+# Update desktop file
+sed -i -E "s|^Exec=.*|Exec=${APP_SLUG}|" "${DESKTOP_PATH}"
+sed -i -E "s|^Icon=.*|Icon=${APP_ID}|" "${DESKTOP_PATH}"
+sed -i -E "s|^Name=.*|Name=${APP_NAME_DISPLAY}|" "${DESKTOP_PATH}"
+grep -q '^StartupWMClass=' "${DESKTOP_PATH}" || echo "StartupWMClass=${APP_SLUG}" >> "${DESKTOP_PATH}"
+grep -q '^Categories=' "${DESKTOP_PATH}" || echo "Categories=Development;Utility;" >> "${DESKTOP_PATH}"
+grep -q '^Keywords=' "${DESKTOP_PATH}" || echo "Keywords=github;ssh;git;key;manager;" >> "${DESKTOP_PATH}"
+
+# Install icon in hicolor at all standard sizes
+HICOLOR_DIR="${USR_NORMALIZED}/share/icons/hicolor"
+for size in 16 22 24 32 48 64 128 256 512; do
+    icon_dir="${HICOLOR_DIR}/${size}x${size}/apps"
+    mkdir -p "$icon_dir"
+    convert "$ICON_PATH" -resize "${size}x${size}" "$icon_dir/${APP_SLUG}.png"
+done
+cp "$ICON_PATH" "${HICOLOR_DIR}/256x256/apps/${APP_SLUG}.png"
 
 # ---------------------------------------------------------------------
-# Tarball (keep the Fyne-standard distribution format)
+# Tarball
 # ---------------------------------------------------------------------
 
 log_phase "Building tarball"
+TARBALL_ROOT="${WORK_DIR}/tarball-root"
+rm -rf "${TARBALL_ROOT}"
+mkdir -p "${TARBALL_ROOT}/${APP_SLUG}-${VERSION}-linux-${DEB_ARCH}"
+
+cp -a "${USR_NORMALIZED}/." "${TARBALL_ROOT}/${APP_SLUG}-${VERSION}-linux-${DEB_ARCH}/"
+
 TARBALL="dist/${APP_SLUG}-${VERSION}-${DEB_ARCH}.tar.gz"
 (
-    cd build
-    tar -czf "../${TARBALL}" "${APP_SLUG}"
+    cd "${TARBALL_ROOT}"
+    tar -czf "../../${TARBALL}" "${APP_SLUG}-${VERSION}-linux-${DEB_ARCH}"
 )
 log_success "Tarball: ${TARBALL}"
 
@@ -440,7 +532,8 @@ log_success "Tarball: ${TARBALL}"
 # ---------------------------------------------------------------------
 
 log_phase "Building Debian package"
-DEB_DIR="${APP_SLUG}-deb"
+DEB_DIR="${WORK_DIR}/deb-root"
+rm -rf "${DEB_DIR}"
 mkdir -p "${DEB_DIR}/DEBIAN"
 mkdir -p "${DEB_DIR}/usr/bin"
 mkdir -p "${DEB_DIR}/usr/share/applications"
@@ -448,7 +541,7 @@ mkdir -p "${DEB_DIR}/usr/share/pixmaps"
 mkdir -p "${DEB_DIR}/usr/share/icons/hicolor"
 mkdir -p "${DEB_DIR}/usr/share/doc/${APP_SLUG}"
 
-cp "build/${APP_SLUG}" "${DEB_DIR}/usr/bin/${APP_SLUG}"
+cp "${BIN_PATH}" "${DEB_DIR}/usr/bin/${APP_SLUG}"
 chmod 755 "${DEB_DIR}/usr/bin/${APP_SLUG}"
 
 for size in 16 22 24 32 48 64 128 256 512; do
@@ -458,7 +551,7 @@ for size in 16 22 24 32 48 64 128 256 512; do
 done
 cp "$ICON_PATH" "${DEB_DIR}/usr/share/pixmaps/${APP_SLUG}.png"
 
-cat > "${DEB_DIR}/usr/share/applications/${APP_SLUG}.desktop" <<DESKTOP
+cat > "${DEB_DIR}/usr/share/applications/${APP_ID}.desktop" <<DESKTOP
 [Desktop Entry]
 Version=1.0
 Type=Application
@@ -466,7 +559,7 @@ Name=${APP_NAME_DISPLAY}
 GenericName=${GENERIC_NAME}
 Comment=${DESCRIPTION}
 Exec=${APP_SLUG}
-Icon=${APP_SLUG}
+Icon=${APP_ID}
 Terminal=false
 Categories=Development;Utility;
 Keywords=github;ssh;git;key;manager;
@@ -522,13 +615,12 @@ log_success "Debian package: dist/${APP_SLUG}_${VERSION}_${DEB_ARCH}.deb"
 # ---------------------------------------------------------------------
 
 log_phase "Building AppImage"
-APPDIR="${APP_SLUG}.AppDir"
 mkdir -p "${APPDIR}/usr/bin"
 mkdir -p "${APPDIR}/usr/share/applications"
 mkdir -p "${APPDIR}/usr/share/icons/hicolor"
 mkdir -p "${APPDIR}/usr/share/metainfo"
 
-cp "build/${APP_SLUG}" "${APPDIR}/usr/bin/${APP_SLUG}"
+cp "${BIN_PATH}" "${APPDIR}/usr/bin/${APP_SLUG}"
 chmod 755 "${APPDIR}/usr/bin/${APP_SLUG}"
 
 cat > "${APPDIR}/AppRun" <<APPRUN
@@ -603,6 +695,13 @@ fi
 ARCH="${APPIMAGE_ARCH}" "$APPIMAGETOOL_BIN" --comp gzip "${APPDIR}" "dist/${APP_SLUG}-${VERSION}-${APPIMAGE_ARCH}.AppImage"
 chmod +x "dist/${APP_SLUG}-${VERSION}-${APPIMAGE_ARCH}.AppImage"
 log_success "AppImage: dist/${APP_SLUG}-${VERSION}-${APPIMAGE_ARCH}.AppImage"
+
+# ---------------------------------------------------------------------
+# Cleanup
+# ---------------------------------------------------------------------
+
+log_phase "Cleanup"
+rm -rf "${WORK_DIR}" "${APP_SLUG}.tar.xz" "${APP_SLUG}.tar.gz"
 
 # ---------------------------------------------------------------------
 # Checksums
