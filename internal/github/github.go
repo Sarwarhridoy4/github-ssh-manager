@@ -1,4 +1,6 @@
-package main
+// Package github provides a client for the GitHub REST API,
+// specifically for uploading SSH public keys to a user account.
+package github
 
 import (
 	"bytes"
@@ -8,19 +10,23 @@ import (
 	"time"
 )
 
-type githubKeyRequest struct {
+// KeyRequest represents the payload for creating a new SSH key on GitHub.
+type KeyRequest struct {
 	Title string `json:"title"`
 	Key   string `json:"key"`
 }
 
-type githubKeyResponse struct {
+// KeyResponse represents the response from GitHub after uploading an SSH key.
+type KeyResponse struct {
 	ID      int64  `json:"id"`
 	Title   string `json:"title"`
 	Message string `json:"message"`
 }
 
-func uploadKeyToGitHub(token, title, publicKey string) (*githubKeyResponse, error) {
-	payload := githubKeyRequest{Title: title, Key: publicKey}
+// UploadKeyToGitHub uploads a public SSH key to the authenticated user's GitHub account.
+// The token must have the admin:public_key scope.
+func UploadKeyToGitHub(token, title, publicKey string) (*KeyResponse, error) {
+	payload := KeyRequest{Title: title, Key: publicKey}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -43,7 +49,7 @@ func uploadKeyToGitHub(token, title, publicKey string) (*githubKeyResponse, erro
 	}
 	defer resp.Body.Close()
 
-	var decoded githubKeyResponse
+	var decoded KeyResponse
 	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
 		return nil, err
 	}

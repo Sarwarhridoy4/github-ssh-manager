@@ -1,4 +1,4 @@
-# If PREFIX isn't provided, we check for $(DESTDIR)/usr/local and use that if it exists.
+go mod tidy && go build -o /dev/null ./...# If PREFIX isn't provided, we check for $(DESTDIR)/usr/local and use that if it exists.
 # Otherwise we fall back to using /usr.
 
 LOCAL != test -d $(DESTDIR)/usr/local && echo -n "/local" || echo -n ""

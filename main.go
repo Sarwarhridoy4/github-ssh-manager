@@ -6,6 +6,9 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/dialog"
+
+	"github.com/Sarwarhridoy4/github-ssh-manager/internal/ssh"
+	"github.com/Sarwarhridoy4/github-ssh-manager/internal/ui"
 )
 
 func main() {
@@ -13,18 +16,22 @@ func main() {
 	w := a.NewWindow("GitHub SSH Manager")
 	w.Resize(fyne.NewSize(980, 760))
 
-	sshDir, err := getSSHDirectory()
+	sshDir, err := ssh.GetSSHDirectory()
 	if err != nil {
-		dialog.ShowError(err, w)
 		w.ShowAndRun()
+		fyne.Do(func() {
+			dialog.ShowError(err, w)
+		})
 		return
 	}
-	if err := ensureSSHDirectory(sshDir); err != nil {
-		dialog.ShowError(fmt.Errorf("failed to prepare SSH directory: %w", err), w)
+	if err := ssh.EnsureSSHDirectory(sshDir); err != nil {
 		w.ShowAndRun()
+		fyne.Do(func() {
+			dialog.ShowError(fmt.Errorf("failed to prepare SSH directory: %w", err), w)
+		})
 		return
 	}
 
-	buildUI(a, w, sshDir)
+	ui.BuildUI(a, w, sshDir)
 	w.ShowAndRun()
 }
