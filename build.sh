@@ -520,10 +520,10 @@ mkdir -p "${TARBALL_ROOT}/${APP_SLUG}-${VERSION}-linux-${DEB_ARCH}"
 
 cp -a "${USR_NORMALIZED}/." "${TARBALL_ROOT}/${APP_SLUG}-${VERSION}-linux-${DEB_ARCH}/"
 
-TARBALL="dist/${APP_SLUG}-${VERSION}-${DEB_ARCH}.tar.gz"
+TARBALL="$(pwd)/dist/${APP_SLUG}-${VERSION}-${DEB_ARCH}.tar.gz"
 (
     cd "${TARBALL_ROOT}"
-    tar -czf "../../${TARBALL}" "${APP_SLUG}-${VERSION}-linux-${DEB_ARCH}"
+    tar -czf "${TARBALL}" "${APP_SLUG}-${VERSION}-linux-${DEB_ARCH}"
 )
 log_success "Tarball: ${TARBALL}"
 
