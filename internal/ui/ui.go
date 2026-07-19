@@ -1,4 +1,6 @@
-package main
+// Package ui provides the main application window layout, widgets, dialogs,
+// and event handlers for the GitHub SSH Manager.
+package ui
 
 import (
 	"fmt"
@@ -16,28 +18,35 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+
+	"github.com/Sarwarhridoy4/github-ssh-manager/internal/github"
+	"github.com/Sarwarhridoy4/github-ssh-manager/internal/logging"
+	"github.com/Sarwarhridoy4/github-ssh-manager/internal/ssh"
+	apptheme "github.com/Sarwarhridoy4/github-ssh-manager/internal/theme"
+	"github.com/Sarwarhridoy4/github-ssh-manager/internal/validation"
 )
 
-func buildUI(a fyne.App, w fyne.Window, sshDir string) {
+// BuildUI constructs the main application window with all widgets and event handlers.
+func BuildUI(a fyne.App, w fyne.Window, sshDir string) {
 	configFile := filepath.Join(sshDir, "config")
 	logContainer := container.NewVBox()
-	log := newLogger(logContainer, w)
-	log.info("Application started")
-	log.info("Operating system: " + runtime.GOOS)
-	log.info("SSH directory: " + sshDir)
+	log := logging.NewLogger(logContainer, w)
+	log.Info("Application started")
+	log.Info("Operating system: " + runtime.GOOS)
+	log.Info("SSH directory: " + sshDir)
 
 	labelEntry := widget.NewEntry()
-	labelEntry.SetPlaceHolder("personal, work, company")
+	labelEntry.SetPlaceHolder("e.g. personal, work, company")
 
 	hostEntry := widget.NewEntry()
-	hostEntry.SetPlaceHolder("github-personal")
+	hostEntry.SetPlaceHolder("e.g. github-personal")
 
 	tokenEntry := widget.NewPasswordEntry()
 	tokenEntry.SetPlaceHolder("GitHub token (scope: admin:public_key, repo optional)")
 
 	themeSelect := widget.NewSelect([]string{"System (Default)", "Light", "Dark"}, func(choice string) {
-		applyThemeChoice(a, choice)
-		log.info("Theme changed to: " + choice)
+		apptheme.ApplyThemeChoice(a, choice)
+		log.Info("Theme changed to: " + choice)
 	})
 	themeSelect.SetSelected("System (Default)")
 
@@ -53,14 +62,14 @@ func buildUI(a fyne.App, w fyne.Window, sshDir string) {
 		alias := strings.TrimSpace(hostEntry.Text)
 		token := strings.TrimSpace(tokenEntry.Text)
 
-		if err := validateLabel(label); err != nil {
+		if err := validation.ValidateLabel(label); err != nil {
 			return "", "", "", err
 		}
-		if err := validateHostAlias(alias); err != nil {
+		if err := validation.ValidateHostAlias(alias); err != nil {
 			return "", "", "", err
 		}
 		if requirePAT {
-			if err := requireToken(token); err != nil {
+			if err := validation.RequireToken(token); err != nil {
 				return "", "", "", err
 			}
 		}
@@ -71,33 +80,33 @@ func buildUI(a fyne.App, w fyne.Window, sshDir string) {
 		label, alias, _, err := validateInputs(false)
 		if err != nil {
 			dialog.ShowError(err, w)
-			log.err(err.Error())
+			log.Err(err.Error())
 			return
 		}
 
 		setStatus("Generating key pair")
-		keyPath, err := generateKeyPair(sshDir, label)
+		keyPath, err := ssh.GenerateKeyPair(sshDir, label)
 		if err != nil {
 			dialog.ShowError(err, w)
-			log.err(err.Error())
+			log.Err(err.Error())
 			setStatus("Failed")
 			return
 		}
-		log.success("SSH key generated: " + keyPath)
+		log.Success("SSH key generated: " + keyPath)
 
-		if err := ensureGitHubKnownHost(sshDir); err != nil {
-			log.warn("Could not update known_hosts: " + err.Error())
+		if err := ssh.EnsureGitHubKnownHost(sshDir); err != nil {
+			log.Warn("Could not update known_hosts: " + err.Error())
 		} else {
-			log.success("github.com present in known_hosts")
+			log.Success("github.com present in known_hosts")
 		}
 
-		if err := ensureSSHConfigEntry(configFile, alias, keyPath); err != nil {
+		if err := ssh.EnsureSSHConfigEntry(configFile, alias, keyPath); err != nil {
 			dialog.ShowError(err, w)
-			log.err("Failed to update SSH config: " + err.Error())
+			log.Err("Failed to update SSH config: " + err.Error())
 			setStatus("Failed")
 			return
 		}
-		log.success("SSH config updated for host " + alias)
+		log.Success("SSH config updated for host " + alias)
 		setStatus("Key generated and config updated")
 		dialog.ShowInformation("Success", "SSH key created and SSH config updated.", w)
 	})
@@ -105,16 +114,16 @@ func buildUI(a fyne.App, w fyne.Window, sshDir string) {
 
 	showPublicBtn := widget.NewButtonWithIcon("Show Public Key", theme.VisibilityIcon(), func() {
 		label := strings.TrimSpace(labelEntry.Text)
-		if err := validateLabel(label); err != nil {
+		if err := validation.ValidateLabel(label); err != nil {
 			dialog.ShowError(err, w)
-			log.err(err.Error())
+			log.Err(err.Error())
 			return
 		}
 
-		pub, err := readPublicKey(sshDir, label)
+		pub, err := ssh.ReadPublicKey(sshDir, label)
 		if err != nil {
 			dialog.ShowError(err, w)
-			log.err(err.Error())
+			log.Err(err.Error())
 			return
 		}
 
@@ -125,7 +134,7 @@ func buildUI(a fyne.App, w fyne.Window, sshDir string) {
 
 		copyBtn := widget.NewButtonWithIcon("Copy", theme.ContentCopyIcon(), func() {
 			a.Clipboard().SetContent(pub)
-			log.success("Public key copied to clipboard")
+			log.Success("Public key copied to clipboard")
 		})
 
 		body := container.NewBorder(
@@ -148,31 +157,31 @@ func buildUI(a fyne.App, w fyne.Window, sshDir string) {
 		label, alias, token, err := validateInputs(true)
 		if err != nil {
 			dialog.ShowError(err, w)
-			log.err(err.Error())
+			log.Err(err.Error())
 			return
 		}
 
-		pub, err := readPublicKey(sshDir, label)
+		pub, err := ssh.ReadPublicKey(sshDir, label)
 		if err != nil {
 			dialog.ShowError(fmt.Errorf("generate key first: %w", err), w)
-			log.err("Public key not found for " + label)
+			log.Err("Public key not found for " + label)
 			return
 		}
 
 		setStatus("Uploading key to GitHub")
-		resp, err := uploadKeyToGitHub(token, label+"-"+alias, pub)
+		resp, err := github.UploadKeyToGitHub(token, label+"-"+alias, pub)
 		if err != nil {
 			msg := err.Error()
 			if resp != nil && resp.Message != "" {
 				msg = resp.Message
 			}
 			dialog.ShowError(fmt.Errorf("GitHub upload failed: %s", msg), w)
-			log.err("GitHub upload failed: " + msg)
+			log.Err("GitHub upload failed: " + msg)
 			setStatus("Upload failed")
 			return
 		}
 
-		log.success(fmt.Sprintf("Key uploaded to GitHub (ID: %d)", resp.ID))
+		log.Success(fmt.Sprintf("Key uploaded to GitHub (ID: %d)", resp.ID))
 		setStatus("Key uploaded")
 		tokenEntry.SetText("")
 		dialog.ShowInformation("Uploaded", fmt.Sprintf("Key uploaded successfully.\nTitle: %s\nID: %d", resp.Title, resp.ID), w)
@@ -181,35 +190,35 @@ func buildUI(a fyne.App, w fyne.Window, sshDir string) {
 
 	testBtn := widget.NewButtonWithIcon("Test SSH", theme.ConfirmIcon(), func() {
 		alias := strings.TrimSpace(hostEntry.Text)
-		if err := validateHostAlias(alias); err != nil {
+		if err := validation.ValidateHostAlias(alias); err != nil {
 			dialog.ShowError(err, w)
-			log.err(err.Error())
+			log.Err(err.Error())
 			return
 		}
 
 		setStatus("Testing SSH connection")
-		output, err := testSSHConnection(alias)
+		output, err := ssh.TestSSHConnection(alias)
 		if err != nil {
-			log.err(output)
+			log.Err(output)
 			dialog.ShowError(fmt.Errorf("%s", output), w)
 			setStatus("SSH test failed")
 			return
 		}
-		log.success("SSH connection verified for " + alias)
+		log.Success("SSH connection verified for " + alias)
 		setStatus("SSH test passed")
 		dialog.ShowInformation("Connection OK", output, w)
 	})
 
 	viewConfigBtn := widget.NewButtonWithIcon("View SSH Config", theme.DocumentIcon(), func() {
-		if err := ensureConfigFile(configFile); err != nil {
+		if err := ssh.EnsureConfigFile(configFile); err != nil {
 			dialog.ShowError(err, w)
-			log.err("Could not prepare config file: " + err.Error())
+			log.Err("Could not prepare config file: " + err.Error())
 			return
 		}
 		cfg, err := osRead(configFile)
 		if err != nil {
 			dialog.ShowError(err, w)
-			log.err(err.Error())
+			log.Err(err.Error())
 			return
 		}
 		if strings.TrimSpace(cfg) == "" {
@@ -223,7 +232,7 @@ func buildUI(a fyne.App, w fyne.Window, sshDir string) {
 
 		copyBtn := widget.NewButtonWithIcon("Copy Config", theme.ContentCopyIcon(), func() {
 			a.Clipboard().SetContent(cfg)
-			log.success("SSH config copied to clipboard")
+			log.Success("SSH config copied to clipboard")
 		})
 		body := container.NewBorder(
 			container.NewVBox(
@@ -257,17 +266,17 @@ func buildUI(a fyne.App, w fyne.Window, sshDir string) {
 
 		fastSetup := widget.NewCard("Fast Setup", "", container.NewVBox(
 			bullet(theme.DocumentCreateIcon(), "1. Create a GitHub token", "Use scope admin:public_key. Add repo only if you need private repository access."),
-			bullet(theme.DocumentIcon(), "2. Fill Label and Host Alias", "Label is the key name; host alias is what you will use in your git remote URL."),
+			bullet(theme.DocumentIcon(), "2. Fill Account Name and Host Alias", "Account Name is the key name; host alias is what you will use in your git remote URL."),
 			bullet(theme.UploadIcon(), "3. Upload key to GitHub", "Upload the generated public key directly using your token."),
 			bullet(theme.ConfirmIcon(), "4. Test SSH connection", "Run the SSH test to verify your setup is working end-to-end."),
 		))
 
 		fieldGuide := widget.NewCard("Field Guide", "", container.NewVBox(
-			bullet(theme.InfoIcon(), "Label", "Friendly key name such as work, personal, or company."),
+			bullet(theme.InfoIcon(), "Account Name", "Friendly key name such as work, personal, or company."),
 			bullet(theme.HelpIcon(), "Host Alias", "A unique SSH host alias per account, for example github-work or github-personal."),
 		))
 
-		configPreview := widget.NewRichTextFromMarkdown("```sshconfig\nHost github-work\n  HostName github.com\n  User git\n  IdentityFile ~/.ssh/<label>-<alias>\n  AddKeysToAgent yes\n  IdentitiesOnly yes\n```")
+		configPreview := widget.NewRichTextFromMarkdown("```sshconfig\nHost github-work\n  HostName github.com\n  User git\n  IdentityFile ~/.ssh/<account>-<alias>\n  AddKeysToAgent yes\n  IdentitiesOnly yes\n  StrictHostKeyChecking accept-new\n  ServerAliveInterval 20\n  ServerAliveCountMax 2\n```")
 		usagePreview := widget.NewRichTextFromMarkdown("Use in git remote: `git@github-work:org/repo.git`")
 		hostAlias := widget.NewCard("Host Alias Details", "", container.NewVBox(
 			bullet(theme.VisibilityIcon(), "Alias Rules", "Use 1-128 characters with letters, numbers, '.', '-', '_'. Do not use github.com."),
@@ -285,7 +294,7 @@ func buildUI(a fyne.App, w fyne.Window, sshDir string) {
 		link := widget.NewHyperlink("Open GitHub Token Settings", linkURL)
 		copyScopeBtn := widget.NewButtonWithIcon("Copy Required Scopes", theme.ContentCopyIcon(), func() {
 			a.Clipboard().SetContent("admin:public_key, repo")
-			log.success("Token scopes copied to clipboard")
+			log.Success("Token scopes copied to clipboard")
 		})
 		scroll := container.NewVScroll(container.NewVBox(
 			fastSetup,
@@ -307,7 +316,7 @@ func buildUI(a fyne.App, w fyne.Window, sshDir string) {
 	clearLogBtn := widget.NewButtonWithIcon("Clear Log", theme.DeleteIcon(), func() {
 		logContainer.Objects = nil
 		logContainer.Refresh()
-		log.info("Log cleared")
+		log.Info("Log cleared")
 	})
 
 	saveLogBtn := widget.NewButtonWithIcon("Save Log", theme.DocumentSaveIcon(), func() {
@@ -333,7 +342,7 @@ func buildUI(a fyne.App, w fyne.Window, sshDir string) {
 				dialog.ShowError(err, w)
 				return
 			}
-			log.success("Log saved: " + writer.URI().Path())
+			log.Success("Log saved: " + writer.URI().Path())
 		}, w)
 		saveDialog.SetFileName("ssh-manager-log-" + time.Now().Format("2006-01-02-150405") + ".txt")
 		saveDialog.Show()
@@ -345,7 +354,7 @@ func buildUI(a fyne.App, w fyne.Window, sshDir string) {
 		"Account Setup",
 		"Create and bind per-account SSH identities",
 		container.New(layout.NewFormLayout(),
-			widget.NewLabel("Label"), labelEntry,
+			widget.NewLabel("Account Name"), labelEntry,
 			widget.NewLabel("Host Alias"), hostEntry,
 			widget.NewLabel("GitHub Token"), tokenEntry,
 			widget.NewLabel("Theme"), themeSelect,

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =====================================================================
 # GitHub SSH Manager - Build and Packaging Script (Linux)
-# Outputs: Debian (.deb) + AppImage
+# Outputs: .tar.gz (Fyne official) + .deb + AppImage
 # =====================================================================
 
 set -euo pipefail
@@ -34,6 +34,10 @@ die() {
     log_error "$1"
     exit 1
 }
+
+# ---------------------------------------------------------------------
+# Dependency auto-install
+# ---------------------------------------------------------------------
 
 detect_pkg_manager() {
     if command -v apt-get >/dev/null 2>&1; then
@@ -84,7 +88,7 @@ install_pkgs() {
 
 ensure_cmd() {
     local cmd="$1"
-    local pkg="$2"
+    local pkg="${2:-}"
     if command -v "$cmd" >/dev/null 2>&1; then
         return 0
     fi
@@ -108,7 +112,7 @@ ensure_cmd() {
 
 try_install_cmd() {
     local cmd="$1"
-    local pkg="$2"
+    local pkg="${2:-}"
     if command -v "$cmd" >/dev/null 2>&1; then
         return 0
     fi
@@ -129,7 +133,20 @@ try_install_cmd() {
     command -v "$cmd" >/dev/null 2>&1
 }
 
-ensure_appimagetool_ready() {
+ensure_fyne_cli() {
+    if command -v fyne >/dev/null 2>&1; then
+        return 0
+    fi
+
+    log_warning "Fyne CLI not found. Installing via 'go install'..."
+    GOBIN="${GOBIN:-$(go env GOPATH)/bin}"
+    go install fyne.io/tools/cmd/fyne@latest || die "Failed to install fyne CLI"
+    export PATH="$GOBIN:$PATH"
+    command -v fyne >/dev/null 2>&1 || die "fyne not found after install"
+    log_success "Installed: fyne"
+}
+
+ensure_appimagetool() {
     local bin_path="$1"
 
     if "$bin_path" --version >/dev/null 2>&1; then
@@ -155,6 +172,47 @@ ensure_appimagetool_ready() {
 
     return 1
 }
+
+download_appimagetool() {
+    local arch="$1"
+    mkdir -p build/tools
+
+    if command -v wget >/dev/null 2>&1; then
+        log_warning "Downloading appimagetool to build/tools/..."
+        wget -q --show-progress \
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${arch}.AppImage" \
+            -O build/tools/appimagetool
+    elif command -v curl >/dev/null 2>&1; then
+        log_warning "Downloading appimagetool to build/tools/..."
+        curl -fsSL \
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${arch}.AppImage" \
+            -o build/tools/appimagetool
+    else
+        log_warning "Neither wget nor curl found; attempting to install one..."
+        if ! try_install_cmd wget wget; then
+            try_install_cmd curl curl || die "Could not install wget or curl"
+        fi
+        if command -v wget >/dev/null 2>&1; then
+            log_warning "Downloading appimagetool to build/tools/..."
+            wget -q --show-progress \
+                "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${arch}.AppImage" \
+                -O build/tools/appimagetool
+        elif command -v curl >/dev/null 2>&1; then
+            log_warning "Downloading appimagetool to build/tools/..."
+            curl -fsSL \
+                "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${arch}.AppImage" \
+                -o build/tools/appimagetool
+        else
+            die "appimagetool not found and neither wget nor curl is available."
+        fi
+    fi
+
+    chmod +x build/tools/appimagetool
+}
+
+# ---------------------------------------------------------------------
+# Metadata from FyneApp.toml
+# ---------------------------------------------------------------------
 
 usage() {
     cat <<EOF
@@ -200,16 +258,22 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-# toml_get <section> <key>
-# section "" means top-level keys.
+print_banner
+log_phase "Loading metadata"
+[ -f FyneApp.toml ] || die "FyneApp.toml not found"
+
+# Read metadata using fyne tool if available, otherwise parse TOML
+if command -v fyne >/dev/null 2>&1; then
+    APP_NAME_DISPLAY="$(fyne package --help 2>/dev/null | grep -oP '(?<=Name: ).*' || true)"
+fi
+
+# Fallback: parse FyneApp.toml manually
 toml_get() {
     local section="$1"
     local key="$2"
 
     awk -v target_section="$section" -v target_key="$key" '
-        BEGIN {
-            cur_section = ""
-        }
+        BEGIN { cur_section = "" }
         /^[[:space:]]*#/ || /^[[:space:]]*;/ || /^[[:space:]]*$/ { next }
         /^[[:space:]]*\[/ {
             sec = $0
@@ -238,11 +302,6 @@ toml_get() {
         }
     ' FyneApp.toml
 }
-
-print_banner
-log_phase "Loading metadata"
-log_info "Reading FyneApp.toml..."
-[ -f FyneApp.toml ] || die "FyneApp.toml not found"
 
 APP_NAME_DISPLAY="$(toml_get "Details" "Name")"
 APP_ID="$(toml_get "Details" "ID")"
@@ -273,7 +332,7 @@ if [ -n "$OVERRIDE_BUILD_NUMBER" ]; then
 fi
 [[ "$BUILD_NUMBER" =~ ^[0-9]+$ ]] || die "Build number must be numeric, got: $BUILD_NUMBER"
 
-# Resolve icon path robustly
+# Resolve icon path
 if [ ! -f "$ICON_PATH" ]; then
     if [ -f "assets/icon.png" ]; then
         ICON_PATH="assets/icon.png"
@@ -312,36 +371,43 @@ echo "  Build       : $BUILD_NUMBER"
 echo "  Architecture: $DEB_ARCH / $APPIMAGE_ARCH"
 echo "  Icon        : $ICON_PATH"
 
+# ---------------------------------------------------------------------
+# Auto-install build dependencies
+# ---------------------------------------------------------------------
+
 log_phase "Validating toolchain"
 ensure_cmd go golang
 ensure_cmd tar tar
 ensure_cmd dpkg-deb dpkg
 ensure_cmd convert imagemagick
+ensure_fyne_cli
 
-if ! command -v fyne >/dev/null 2>&1; then
-    log_warning "Missing required command: fyne. Installing via 'go install'..."
-    GOBIN="${GOBIN:-$(go env GOPATH)/bin}"
-    go install fyne.io/tools/cmd/fyne@latest || die "Failed to install fyne CLI"
-    export PATH="$GOBIN:$PATH"
-    command -v fyne >/dev/null 2>&1 || die "fyne not found after install"
-    log_success "Installed: fyne"
-fi
-
+log_phase "Preparing workspace"
 mkdir -p build dist
-rm -rf build/* dist/* "${APP_SLUG}-deb" "${APP_SLUG}.AppDir" "${APP_SLUG}.tar.gz" "${APP_SLUG}.tar.xz"
+rm -rf build/* dist/* "${APP_SLUG}-deb" "${APP_SLUG}.AppDir" "${APP_SLUG}".tar.gz "${APP_SLUG}".tar.xz
 
-log_phase "Resolving dependencies"
+log_phase "Resolving Go dependencies"
 go mod tidy
 go mod download
 
-log_phase "Packaging Linux binary"
-fyne package -os linux -icon "$ICON_PATH" -name "$APP_SLUG" -app-version "$VERSION" -app-build "$BUILD_NUMBER" -release
+# ---------------------------------------------------------------------
+# Fyne package (official approach)
+# Produces a .tar.gz (or .tar.xz) with usr/local/ layout
+# ---------------------------------------------------------------------
 
-# Fyne docs indicate .tar.gz for Linux packaging
+log_phase "Packaging with Fyne (official)"
+fyne package -os linux \
+    -icon "$ICON_PATH" \
+    -name "$APP_SLUG" \
+    -app-id "$APP_ID" \
+    -app-version "$VERSION" \
+    -app-build "$BUILD_NUMBER" \
+    -release
+
+# Extract the Fyne-produced archive
 if [ -f "${APP_SLUG}.tar.gz" ]; then
     tar -xzf "${APP_SLUG}.tar.gz"
 elif [ -f "${APP_SLUG}.tar.xz" ]; then
-    # Compatibility fallback for older/newer tool behavior
     tar -xf "${APP_SLUG}.tar.xz"
 else
     die "Could not find packaged tar archive from fyne package"
@@ -358,8 +424,21 @@ chmod +x "build/${APP_SLUG}"
 log_success "Binary ready: build/${APP_SLUG}"
 
 # ---------------------------------------------------------------------
+# Tarball (keep the Fyne-standard distribution format)
+# ---------------------------------------------------------------------
+
+log_phase "Building tarball"
+TARBALL="dist/${APP_SLUG}-${VERSION}-${DEB_ARCH}.tar.gz"
+(
+    cd build
+    tar -czf "../${TARBALL}" "${APP_SLUG}"
+)
+log_success "Tarball: ${TARBALL}"
+
+# ---------------------------------------------------------------------
 # Debian package
 # ---------------------------------------------------------------------
+
 log_phase "Building Debian package"
 DEB_DIR="${APP_SLUG}-deb"
 mkdir -p "${DEB_DIR}/DEBIAN"
@@ -441,6 +520,7 @@ log_success "Debian package: dist/${APP_SLUG}_${VERSION}_${DEB_ARCH}.deb"
 # ---------------------------------------------------------------------
 # AppImage
 # ---------------------------------------------------------------------
+
 log_phase "Building AppImage"
 APPDIR="${APP_SLUG}.AppDir"
 mkdir -p "${APPDIR}/usr/bin"
@@ -512,47 +592,11 @@ if command -v appimagetool >/dev/null 2>&1; then
 elif [ -x "build/tools/appimagetool" ]; then
     APPIMAGETOOL_BIN="build/tools/appimagetool"
 else
-    mkdir -p build/tools
-    if command -v wget >/dev/null 2>&1; then
-        log_warning "appimagetool not found; downloading local copy to build/tools/"
-        wget -q --show-progress \
-            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${APPIMAGE_ARCH}.AppImage" \
-            -O build/tools/appimagetool
-        chmod +x build/tools/appimagetool
-        APPIMAGETOOL_BIN="build/tools/appimagetool"
-    elif command -v curl >/dev/null 2>&1; then
-        log_warning "appimagetool not found; downloading local copy to build/tools/"
-        curl -fsSL \
-            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${APPIMAGE_ARCH}.AppImage" \
-            -o build/tools/appimagetool
-        chmod +x build/tools/appimagetool
-        APPIMAGETOOL_BIN="build/tools/appimagetool"
-    else
-        log_warning "Neither wget nor curl found; attempting to install one..."
-        if ! try_install_cmd wget wget; then
-            try_install_cmd curl curl || die "Could not install wget or curl"
-        fi
-        if command -v wget >/dev/null 2>&1; then
-            log_warning "appimagetool not found; downloading local copy to build/tools/"
-            wget -q --show-progress \
-                "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${APPIMAGE_ARCH}.AppImage" \
-                -O build/tools/appimagetool
-            chmod +x build/tools/appimagetool
-            APPIMAGETOOL_BIN="build/tools/appimagetool"
-        elif command -v curl >/dev/null 2>&1; then
-            log_warning "appimagetool not found; downloading local copy to build/tools/"
-            curl -fsSL \
-                "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${APPIMAGE_ARCH}.AppImage" \
-                -o build/tools/appimagetool
-            chmod +x build/tools/appimagetool
-            APPIMAGETOOL_BIN="build/tools/appimagetool"
-        else
-            die "appimagetool not found and neither wget nor curl is available."
-        fi
-    fi
+    download_appimagetool "${APPIMAGE_ARCH}"
+    APPIMAGETOOL_BIN="build/tools/appimagetool"
 fi
 
-if ! ensure_appimagetool_ready "$APPIMAGETOOL_BIN"; then
+if ! ensure_appimagetool "$APPIMAGETOOL_BIN"; then
     die "appimagetool is not runnable. Install FUSE (libfuse.so.2) or run build on a host with FUSE support."
 fi
 
@@ -560,14 +604,18 @@ ARCH="${APPIMAGE_ARCH}" "$APPIMAGETOOL_BIN" --comp gzip "${APPDIR}" "dist/${APP_
 chmod +x "dist/${APP_SLUG}-${VERSION}-${APPIMAGE_ARCH}.AppImage"
 log_success "AppImage: dist/${APP_SLUG}-${VERSION}-${APPIMAGE_ARCH}.AppImage"
 
+# ---------------------------------------------------------------------
+# Checksums
+# ---------------------------------------------------------------------
+
 log_phase "Generating checksums"
 (
     cd dist
-    sha256sum *.deb *.AppImage > SHA256SUMS
-    md5sum *.deb *.AppImage > MD5SUMS
+    sha256sum *.deb *.AppImage *.tar.gz > SHA256SUMS
+    md5sum *.deb *.AppImage *.tar.gz > MD5SUMS
 )
 
 echo
 log_phase "Done"
 log_success "Build complete"
-ls -lh dist/*.deb dist/*.AppImage
+ls -lh dist/

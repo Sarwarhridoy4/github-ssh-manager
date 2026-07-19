@@ -1,4 +1,6 @@
-package main
+// Package theme provides utilities for switching between system, light, and dark themes
+// in Fyne applications.
+package theme
 
 import (
 	"image/color"
@@ -17,7 +19,8 @@ func (f *forcedVariantTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant
 	return f.Theme.Color(name, f.variant)
 }
 
-func applyThemeChoice(a fyne.App, choice string) {
+// ApplyThemeChoice sets the application theme to System, Light, or Dark.
+func ApplyThemeChoice(a fyne.App, choice string) {
 	normalized := strings.ToLower(strings.TrimSpace(choice))
 	switch normalized {
 	case "light":

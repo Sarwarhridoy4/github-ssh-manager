@@ -1,8 +1,8 @@
 # GitHub SSH Manager
 
-[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go&logoColor=white)](https://golang.org/)
+[![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go&logoColor=white)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
-[![Fyne](https://img.shields.io/badge/Fyne-2.6+-orange?logo=go)](https://fyne.io/)
+[![Fyne](https://img.shields.io/badge/Fyne-2.8+-orange?logo=go)](https://fyne.io/)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)](https://github.com/Sarwarhridoy4/github-ssh-manager)
 
 A cross-platform GUI tool built with **Go** and **Fyne** that allows you to manage multiple GitHub SSH keys effortlessly. Generate keys, view public keys, upload to GitHub, test SSH connections, manage your `~/.ssh/config`, and track all operations with built-in activity logging—all from one place.
@@ -41,7 +41,7 @@ A cross-platform GUI tool built with **Go** and **Fyne** that allows you to mana
 - **View SSH Config** – Inspect your `~/.ssh/config` in a polished modal
 - **Activity Logger** – Track all operations with timestamps and log levels
 - **Export Logs** – Save activity logs to file for debugging or record-keeping
-- **Multi-account Support** – Manage multiple GitHub accounts using custom labels
+- **Multi-account Support** – Manage multiple GitHub accounts using custom account names
 - **Cross-platform** – Works on Linux, macOS, and Windows
 - **Built-in Help** – Step-by-step instructions accessible via the Help button
 
@@ -53,7 +53,7 @@ A cross-platform GUI tool built with **Go** and **Fyne** that allows you to mana
 
 ![Main Window](screenshots/Home_Page.png)
 
-_Enter your label, host alias, and PAT, then generate or manage SSH keys easily._
+_Enter your account name, host alias, and PAT, then generate or manage SSH keys easily._
 
 ### 2. Generate Key (Local with Config)
 
@@ -207,7 +207,7 @@ github-ssh-manager.exe
 
 ### Prerequisites
 
-- **Go >= 1.22**
+- **Go >= 1.25**
 - **Git**
 - **SSH tools** (`ssh-keygen`, `ssh`)
 - **Fyne dependencies** (handled automatically via Go modules)
@@ -229,13 +229,14 @@ The GUI window will open, allowing you to manage your GitHub SSH keys.
 
 ```text
 github-ssh-manager/
-├── main.go              # App bootstrap and startup wiring
-├── ui.go                # Main UI layout, actions, and dialogs/modals
-├── ssh.go               # SSH key generation, config, known_hosts operations
-├── github.go            # GitHub API client for SSH key upload
-├── validation.go        # Input validation and security checks
-├── logging.go           # In-app activity logger
-├── theme_switch.go      # Theme switching (System/Light/Dark)
+├── main.go                     # App bootstrap and startup wiring
+├── internal/
+│   ├── ui/                     # Fyne UI layout, widgets, dialogs, event handlers
+│   ├── ssh/                    # SSH key generation, config, known_hosts, testing
+│   ├── github/                 # GitHub REST API client for SSH key upload
+│   ├── validation/             # Input validation and security checks
+│   ├── logging/                # In-memory activity logger
+│   └── theme/                  # Theme switching (System/Light/Dark)
 ├── assets/
 │   └── icon.png
 ├── screenshots/
@@ -253,17 +254,17 @@ github-ssh-manager/
 flowchart TD
     A[Launch App] --> B[Resolve ~/.ssh Path Cross-Platform]
     B --> C[Create/Verify .ssh Directory]
-    C --> D[User Inputs Label + Host Alias + PAT]
+    C --> D[User Inputs Account Name + Host Alias + PAT]
 
     D --> E{Action Selected}
 
-    E -->|Generate Key| F[Validate Label + Host Alias]
-    F --> G[Run ssh-keygen for id_ed25519_label]
+    E -->|Generate Key| F[Validate Account Name + Host Alias]
+    F --> G[Run ssh-keygen for id_ed25519_account-name]
     G --> H[Ensure github.com in known_hosts]
     H --> I[Append/Ensure Host Block in ~/.ssh/config]
     I --> J[Log Success + Update Status]
 
-    E -->|Show Public Key| K[Read id_ed25519_label.pub]
+    E -->|Show Public Key| K[Read id_ed25519_account-name.pub]
     K --> L[Open Public Key Modal]
 
     E -->|Upload to GitHub| M[Validate Inputs + Token]
@@ -323,7 +324,7 @@ sudo apt-get install dpkg-dev imagemagick wget fuse libfuse2
 
 #### Automated Build Script (Linux)
 
-We provide a comprehensive build script that creates both `.deb` and `.AppImage` packages:
+We provide a comprehensive build script that creates `.deb`, `.AppImage`, and `.tar.gz` packages in one run:
 
 ```bash
 # Make the script executable
@@ -333,15 +334,17 @@ chmod +x build.sh
 ./build.sh
 ```
 
-Notes:
-- The script will auto-install missing build tools when possible (using your system package manager).
-- If `appimagetool` is missing, it is downloaded locally to `build/tools/` using `wget` or `curl`.
+The script follows the official Fyne packaging approach and will auto-install missing dependencies using your system package manager.
 
-This will create:
-- `dist/github-ssh-manager_2.5_amd64.deb` - Debian package
-- `dist/github-ssh-manager-2.5-x86_64.AppImage` - Universal Linux package
-- `dist/SHA256SUMS` - Checksums for verification
-- `dist/MD5SUMS` - MD5 checksums
+Outputs in `dist/`:
+- `github-ssh-manager_<version>_<arch>.deb` — Debian package
+- `github-ssh-manager-<version>-<arch>.AppImage` — Universal Linux package
+- `github-ssh-manager-<version>-<arch>.tar.gz` — Fyne-standard tarball
+- `SHA256SUMS` / `MD5SUMS` — Checksums for verification
+
+Notes:
+- If `appimagetool` is missing, it is downloaded automatically to `build/tools/`.
+- FUSE is required for running AppImage; for building, `appimagetool` can run with `--appimage-extract` fallback.
 
 #### Manual Packaging with Fyne
 
@@ -401,14 +404,14 @@ fyne install --icon assets/icon.png
 
 ### 2. Generate SSH Key
 
-1. Enter an **account label** (e.g., `personal`, `work`, `company`)
+1. Enter an **account name** (e.g., `personal`, `work`, `company`)
 2. Enter a **host alias** (e.g., `github-personal`, `github-work`)
 3. Click **"Generate SSH Key"**
-4. The key will be created at `~/.ssh/id_ed25519_<label>`
+4. The key will be created at `~/.ssh/id_ed25519_<account-name>`
 
 ### 3. Show Public Key
 
-1. Enter the label you used
+1. Enter the **account name** you used
 2. Click **"Show Public Key"**
 3. Copy the key to clipboard using the copy button
 
@@ -416,7 +419,7 @@ fyne install --icon assets/icon.png
 
 1. Paste your Personal Access Token (PAT)
 2. Click **"Upload to GitHub"**
-3. Your public key will be uploaded with the title: `<label>-<host-alias>`
+3. Your public key will be uploaded with the title: `<account-name>-<host-alias>`
 
 ### 5. Test SSH Connection
 
@@ -505,9 +508,9 @@ If you want to remove SSH keys created by the app:
 # List keys created by the app
 ls ~/.ssh/id_ed25519_*
 
-# Remove specific key (replace <label> with your label)
-rm ~/.ssh/id_ed25519_<label>
-rm ~/.ssh/id_ed25519_<label>.pub
+# Remove specific key (replace <account-name> with your account name)
+rm ~/.ssh/id_ed25519_<account-name>
+rm ~/.ssh/id_ed25519_<account-name>.pub
 
 # Remove from GitHub (via web interface or API)
 ```
@@ -524,7 +527,7 @@ rm ~/.ssh/id_ed25519_<label>.pub
 ### Build Dependencies
 
 - [Go](https://golang.org/) >= 1.22
-- [Fyne](https://fyne.io/) v2.6+
+- [Fyne](https://fyne.io/) v2.8+
 - [Fyne Tools](https://github.com/fyne-io/fyne) (for packaging)
 
 ### Go Module Dependencies
@@ -605,8 +608,8 @@ This is Windows Defender SmartScreen. If you trust the source:
 ### "Cannot read public key" Error
 
 1. Verify you've generated the key first
-2. Check the label matches exactly (case-sensitive)
-3. Verify file exists: `ls ~/.ssh/id_ed25519_<label>.pub`
+2. Check the account name matches exactly (case-sensitive)
+3. Verify file exists: `ls ~/.ssh/id_ed25519_<account-name>.pub`
 
 ### Build Fails with "command not found: fyne"
 
@@ -620,10 +623,10 @@ export PATH=$PATH:$(go env GOPATH)/bin
 
 ## 📝 Notes
 
-- SSH keys are saved under `~/.ssh/id_ed25519_<label>`
-- Public keys are named `~/.ssh/id_ed25519_<label>.pub`
+- SSH keys are saved under `~/.ssh/id_ed25519_<account-name>`
+- Public keys are named `~/.ssh/id_ed25519_<account-name>.pub`
 - Host entries are automatically added to `~/.ssh/config`
-- GitHub public key titles are formatted as: `<label>-<host-alias>`
+- GitHub public key titles are formatted as: `<account-name>-<host-alias>`
 - Activity logs are stored in memory and can be exported
 - The app requires network access for GitHub API operations
 - Minimum screen resolution: 800x600 (recommended: 1024x768+)
