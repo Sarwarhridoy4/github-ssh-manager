@@ -328,16 +328,24 @@ if [ -n "$OVERRIDE_BUILD_NUMBER" ]; then
 fi
 [[ "$BUILD_NUMBER" =~ ^[0-9]+$ ]] || die "Build number must be numeric, got: $BUILD_NUMBER"
 
-# Resolve icon path
+# Resolve icon path to absolute path to avoid issues with sudo/chdir
 if [ ! -f "$ICON_PATH" ]; then
     if [ -f "assets/icon.png" ]; then
-        ICON_PATH="assets/icon.png"
+        ICON_PATH="$(pwd)/assets/icon.png"
     elif [ -f "icon.png" ]; then
-        ICON_PATH="icon.png"
+        ICON_PATH="$(pwd)/icon.png"
     else
         die "Icon file not found (checked: $ICON_PATH, assets/icon.png, icon.png)"
     fi
+else
+    ICON_PATH="$(cd "$(dirname "$ICON_PATH")" && pwd)/$(basename "$ICON_PATH")"
 fi
+
+if [ ! -r "$ICON_PATH" ]; then
+    die "Icon file is not readable: $ICON_PATH"
+fi
+
+log_info "Using icon: $ICON_PATH"
 
 # Debian package/binary-safe slug
 APP_SLUG="$(echo "$APP_NAME_DISPLAY" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd 'a-z0-9.+-')"
